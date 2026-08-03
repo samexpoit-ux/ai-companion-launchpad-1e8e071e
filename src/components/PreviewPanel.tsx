@@ -22,6 +22,7 @@ import {
   MousePointerClick,
   Check,
   Layers,
+  Square,
 } from "lucide-react";
 import {
   DropdownMenu,
