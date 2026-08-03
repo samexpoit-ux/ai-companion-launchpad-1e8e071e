@@ -5,36 +5,48 @@
  * that can do the job (same behaviour as Lovable). Swap any OpenRouter model id
  * below and the whole app follows: chat, plan, coding and auto-fix.
  *
+ * Selected from the live OpenRouter catalogue (prices per 1M tokens):
+ *   openai/gpt-5.6-luna-pro      $0.10 / $0.60   1.05M ctx  (pro reasoning)
+ *   openai/gpt-5.6-luna          $0.10 / $0.60   1.05M ctx
+ *   z-ai/glm-5.2                 $0.70 / $2.20   1.05M ctx  (strongest patcher)
+ *   qwen/qwen3-coder-next        $0.12 / $0.80   262K ctx
+ *   kwaipilot/kat-coder-air-v2.5 $0.15 / $0.60   256K ctx
+ *   deepseek/deepseek-v4-pro     $0.435 / $0.87  1.05M ctx  (cheap reasoning)
+ *   deepseek/deepseek-v4-flash   $0.09 / $0.18   1.05M ctx  (cheapest)
+ *
+ * Claude Sonnet 4.6 ($3 / $15) was removed: a build turn cost ~$0.078 there
+ * versus ~$0.003 on GPT-5.6 Luna Pro, which is what made the 200-credit plan
+ * unprofitable.
+ *
  * Cost policy:
  *   fast   — greetings/one-liners       → cheapest
- *   chat   — everyday chat + planning   → cheap
- *   reason — architecture, plans        → cheap-mid
- *   code   — building, refactors        → best coding model
- *   fix    — runtime error auto-fix     → best coding model
+ *   chat   — everyday chat              → cheap, smart
+ *   reason — architecture, plans        → cheap reasoning
+ *   code   — building, refactors        → best value coding model
+ *   fix    — runtime error auto-fix     → best patching model
  *
  * IMPORTANT: every id here must exist on https://openrouter.ai/api/v1/models.
- * Retired ids (claude-3.7-sonnet, gemini-2.0-flash-001, deepseek-chat:free …)
- * silently fell through the fallback chain and builds landed on a weak model —
- * that is why generated code used to be inaccurate.
+ * Retired ids silently fall through the fallback chain and builds land on a
+ * weak model — that is why generated code used to be inaccurate.
  */
 
-/** Coding tier — best code structure first, strong cheap coders as fallback. */
-export const CODING_PRIMARY = "anthropic/claude-sonnet-4.6";
-export const CODING_SECONDARY = "anthropic/claude-sonnet-4.5";
+/** Coding tier — best value first, strong cheap coders as fallback. */
+export const CODING_PRIMARY = "openai/gpt-5.6-luna-pro";
+export const CODING_SECONDARY = "z-ai/glm-5.2";
 /** Cheap specialist coders (agentic, long context) used before giving up. */
-export const CODING_TERTIARY = "moonshotai/kimi-k2.7-code";
-export const CODING_BUDGET = "qwen/qwen3-coder-plus";
+export const CODING_TERTIARY = "qwen/qwen3-coder-next";
+export const CODING_BUDGET = "kwaipilot/kat-coder-air-v2.5";
 
-/** Cheap tier — chat, plan, titles. */
-export const CHEAP_CHAT = "deepseek/deepseek-chat-v3.1";
+/** Cheap tier — chat, titles. */
+export const CHEAP_CHAT = "openai/gpt-5.6-luna";
 /** Ultra-cheap tier — greetings, titles, one-liners. */
-export const NANO_CHAT = "google/gemini-3.1-flash-lite";
+export const NANO_CHAT = "deepseek/deepseek-v4-flash";
 /** Cheap reasoning/plan model with a very large context window. */
-export const CHEAP_REASON = "z-ai/glm-4.7";
+export const CHEAP_REASON = "deepseek/deepseek-v4-pro";
 
 /** Free safety net so the product keeps working when credit runs out. */
-export const FREE_CODE = "cohere/north-mini-code:free";
-export const FREE_POWER = "nvidia/nemotron-3-super-120b-a12b:free";
+export const FREE_CODE = "poolside/laguna-s-2.1:free";
+export const FREE_POWER = "nvidia/nemotron-3-ultra-550b-a55b:free";
 export const FREE_SMART = "google/gemma-4-31b-it:free";
 export const FREE_FAST = "nvidia/nemotron-3-nano-30b-a3b:free";
 export const FREE_OSS = "openai/gpt-oss-20b:free";
@@ -51,9 +63,10 @@ export const TIER_CHAINS = {
     FREE_POWER,
     FREE_OSS,
   ],
+  // Bug fixing / auto-fix: GLM-5.2 writes the most reliable patches.
   fix: [
-    CODING_PRIMARY,
     CODING_SECONDARY,
+    CODING_PRIMARY,
     CODING_TERTIARY,
     CODING_BUDGET,
     CHEAP_REASON,
@@ -61,13 +74,13 @@ export const TIER_CHAINS = {
     FREE_POWER,
     FREE_OSS,
   ],
-  // Plans stay on the cheap tier — no Sonnet spend for planning.
-  reason: [CHEAP_REASON, CHEAP_CHAT, FREE_POWER, FREE_SMART, FREE_OSS],
+  // Plans stay cheap — Luna Pro reasons at chat-model prices.
+  reason: [CODING_PRIMARY, CHEAP_REASON, CHEAP_CHAT, FREE_POWER, FREE_SMART, FREE_OSS],
   chat: [CHEAP_CHAT, NANO_CHAT, FREE_POWER, FREE_SMART, FREE_OSS],
-  fast: [NANO_CHAT, FREE_FAST, FREE_POWER, FREE_OSS],
+  fast: [NANO_CHAT, CHEAP_CHAT, FREE_FAST, FREE_POWER, FREE_OSS],
 } as const;
 
-/** Small code question — no need to pay Sonnet prices. */
+/** Small code question — no need to pay the top coding tier. */
 export const LIGHT_CODE_CHAIN = [
   CODING_TERTIARY,
   CODING_BUDGET,
@@ -78,11 +91,12 @@ export const LIGHT_CODE_CHAIN = [
 ];
 
 /** Models that cost real money, grouped by how expensive they are. */
-export const PREMIUM_MODELS: readonly string[] = [CODING_PRIMARY, CODING_SECONDARY];
+export const PREMIUM_MODELS: readonly string[] = [CODING_SECONDARY];
 export const CHEAP_MODELS: readonly string[] = [
   CHEAP_CHAT,
   NANO_CHAT,
   CHEAP_REASON,
+  CODING_PRIMARY,
   CODING_TERTIARY,
   CODING_BUDGET,
 ];
