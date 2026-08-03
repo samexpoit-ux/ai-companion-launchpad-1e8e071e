@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { clampChainToCeiling, CODING_PRIMARY, CHEAP_CHAT, TIER_CHAINS } from "./model-tiers";
+import {
+  clampChainToCeiling,
+  CHEAP_MODELS,
+  CODING_PRIMARY,
+  PREMIUM_MODELS,
+  TIER_CHAINS,
+} from "./model-tiers";
 import { estimateCost, actionForMode } from "./credits";
 
 describe("plan-aware routing", () => {
   it("free/cheap ceiling never reaches the premium coding models", () => {
     const chain = clampChainToCeiling(TIER_CHAINS.code, "cheap");
-    expect(chain).not.toContain(CODING_PRIMARY);
-    expect(chain[0]).toBe(CHEAP_CHAT);
+    for (const premium of PREMIUM_MODELS) expect(chain).not.toContain(premium);
+    expect(CHEAP_MODELS).toContain(chain[0]);
   });
+
 
   it("premium ceiling keeps the full chain", () => {
     expect(clampChainToCeiling(TIER_CHAINS.code, "premium")[0]).toBe(CODING_PRIMARY);
