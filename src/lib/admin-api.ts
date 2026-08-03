@@ -611,14 +611,15 @@ export async function fetchUsageReport(days = 30, limit = 500): Promise<UsageRep
 
   const byUser = new Map<string, UsageUserRow>();
   for (const row of requests) {
-    const profile = profileBy.get(row.userId);
+    const who = identity(row.userId);
     const agg =
       byUser.get(row.userId) ??
       ({
         userId: row.userId,
-        email: profile?.email ?? null,
-        displayName: profile?.display_name ?? null,
-        plan: planBy.get(row.userId) ?? profile?.plan ?? "free",
+        email: who.email,
+        displayName: who.displayName,
+        plan: who.plan,
+
         requests: 0,
         credits: 0,
         refunded: 0,
