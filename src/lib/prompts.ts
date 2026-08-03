@@ -126,6 +126,8 @@ PREVIEW CONTRACT — what the sandbox can run:
 - In the React preview only these packages exist: react, react-dom, lucide-react,
   react-router-dom, framer-motion, clsx, tailwind-merge. Routing/animation run on lightweight
   shims, so keep to common APIs (BrowserRouter/Routes/Route/Link/useNavigate).
+  Import packages only by these exact names; never use deep package paths such as
+  react-router-dom/dist or react-router-dom/client.
   Style with Tailwind utility classes (the real Tailwind compiler runs in the sandbox) or inline
   styles. Never import other UI libraries, never fetch remote packages at runtime.
 - Front-end code must not call a backend that does not exist yet: keep typed mock data in the

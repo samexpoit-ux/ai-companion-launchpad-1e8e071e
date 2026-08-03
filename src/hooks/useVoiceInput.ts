@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface SpeechRecognitionEventLike extends Event {
-  results: ArrayLike<ArrayLike<{ transcript: string }>>;
+  resultIndex?: number;
+  results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }>;
 }
 
 interface SpeechRecognitionErrorEventLike extends Event {
@@ -25,6 +26,7 @@ export function useVoiceInput(onTranscript: (text: string) => void) {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [partialTranscript, setPartialTranscript] = useState("");
   const supported = typeof window !== "undefined" && Boolean(
     (window as typeof window & { SpeechRecognition?: SpeechRecognitionCtor; webkitSpeechRecognition?: SpeechRecognitionCtor }).SpeechRecognition ??
       (window as typeof window & { webkitSpeechRecognition?: SpeechRecognitionCtor }).webkitSpeechRecognition,
@@ -32,11 +34,10 @@ export function useVoiceInput(onTranscript: (text: string) => void) {
 
   useEffect(() => () => recognitionRef.current?.stop(), []);
 
-  const toggle = useCallback(() => {
-    if (recognitionRef.current && listening) {
-      recognitionRef.current.stop();
-      return;
-    }
+  const stop = useCallback(() => recognitionRef.current?.stop(), []);
+
+  const start = useCallback(() => {
+    if (recognitionRef.current) return;
     const browser = window as typeof window & {
       SpeechRecognition?: SpeechRecognitionCtor;
       webkitSpeechRecognition?: SpeechRecognitionCtor;
@@ -48,14 +49,20 @@ export function useVoiceInput(onTranscript: (text: string) => void) {
     }
     const recognition = new Recognition();
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.lang = navigator.language || "en-US";
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0]?.transcript ?? "")
-        .join(" ")
-        .trim();
-      if (transcript) onTranscript(transcript);
+      let interim = "";
+      const final: string[] = [];
+      for (let index = event.resultIndex ?? 0; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const text = result?.[0]?.transcript?.trim() ?? "";
+        if (!text) continue;
+        if (result.isFinal) final.push(text);
+        else interim += `${interim ? " " : ""}${text}`;
+      }
+      setPartialTranscript(interim);
+      if (final.length) onTranscript(final.join(" "));
     };
     recognition.onerror = (event) => {
       setError(event.error === "not-allowed" ? "Microphone permission was denied." : "Voice input stopped unexpectedly.");
@@ -64,12 +71,28 @@ export function useVoiceInput(onTranscript: (text: string) => void) {
     recognition.onend = () => {
       recognitionRef.current = null;
       setListening(false);
+      setPartialTranscript("");
     };
     recognitionRef.current = recognition;
     setError(null);
     setListening(true);
     recognition.start();
-  }, [listening, onTranscript]);
+  }, [onTranscript]);
 
-  return { supported, listening, error, clearError: () => setError(null), toggle };
+  const toggle = useCallback(() => {
+    if (listening) stop();
+    else start();
+  }, [listening, start, stop]);
+
+  return {
+    supported,
+    listening,
+    partialTranscript,
+    error,
+    clearError: () => setError(null),
+    clearPartialTranscript: () => setPartialTranscript(""),
+    start,
+    stop,
+    toggle,
+  };
 }

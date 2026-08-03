@@ -46,6 +46,10 @@ const STYLE_RE = /\.(css|scss|sass|less)$/;
 const IMPORT_RE = /(?:^|\n)\s*import\s+(?:[^'"]*?from\s*)?["']([^"']+)["']/g;
 const REQUIRE_RE = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
 
+function isPreviewExternal(id: string) {
+  return EXTERNAL_MODULES.has(id) || id.startsWith("react-router-dom/") || id.startsWith("react-router/");
+}
+
 function lineOf(source: string, index: number) {
   return source.slice(0, index).split("\n").length;
 }
@@ -62,7 +66,7 @@ function lintFile(path: string, source: string, files: Record<string, string>): 
     let m: RegExpExecArray | null;
     while ((m = re.exec(source))) {
       const id = m[1];
-      if (EXTERNAL_MODULES.has(id) || STYLE_RE.test(id)) continue;
+      if (isPreviewExternal(id) || STYLE_RE.test(id)) continue;
       if (id.startsWith(".") || id.startsWith("@/") || id.startsWith("/")) {
         const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
         if (!resolved) push("error", `Cannot resolve import "${id}"`, m.index);

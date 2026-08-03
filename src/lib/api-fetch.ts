@@ -7,7 +7,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 
-export async function apiFetch(path: string, body: unknown): Promise<Response> {
+export async function apiFetch(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   return fetch(path, {
@@ -17,6 +17,7 @@ export async function apiFetch(path: string, body: unknown): Promise<Response> {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
+    signal,
   });
 }
 

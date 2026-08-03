@@ -210,7 +210,7 @@ export const Route = createFileRoute("/api/chat")({
 
         try {
           const { content, tokens, inputTokens, outputTokens, costUsd, upstream } =
-            await runWithFallback(route, cleanMessages, (attempt) => attempts.push(attempt));
+            await runWithFallback(route, cleanMessages, (attempt) => attempts.push(attempt), request.signal);
           const finalCharge = await finalizeRequestCost(request, charge.id, actionForMode(mode), {
             costUsd,
             inputTokens,
@@ -278,6 +278,7 @@ export const Route = createFileRoute("/api/chat")({
             },
           });
         } catch (err) {
+          if (request.signal.aborted) return new Response(null, { status: 499 });
           await finalizeRequestCost(request, charge.id, actionForMode(mode), { failed: true });
           const e = err as Error & { status?: number };
           await recordTrace(request, {

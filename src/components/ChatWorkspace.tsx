@@ -55,6 +55,8 @@ import {
   Coins,
   History,
   ArrowLeft,
+  UploadCloud,
+  Square,
 } from "lucide-react";
 import {
   sendChatMessage,
@@ -174,6 +176,9 @@ function ChatWorkspaceInner() {
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  const [voiceDraft, setVoiceDraft] = useState("");
 
   // "Ask AI" from the preview's visual editor pre-fills the composer.
   useEffect(() => {
@@ -192,11 +197,14 @@ function ChatWorkspaceInner() {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const requestAbortRef = useRef<AbortController | null>(null);
 
   const appendTranscript = useCallback((transcript: string) => {
-    setInput((current) => `${current}${current.trim() ? " " : ""}${transcript}`);
+    setVoiceDraft((current) => `${current}${current.trim() ? " " : ""}${transcript}`);
   }, []);
   const voice = useVoiceInput(appendTranscript);
+
+  useEffect(() => () => requestAbortRef.current?.abort(), []);
 
   const addFiles = useCallback(async (files: FileList | null) => {
     if (!files?.length) return;
@@ -204,11 +212,21 @@ function ChatWorkspaceInner() {
     try {
       const available = Math.max(0, MAX_ATTACHMENTS - attachments.length);
       if (available === 0) throw new Error(`You can attach up to ${MAX_ATTACHMENTS} files.`);
-      const next = await Promise.all(Array.from(files).slice(0, available).map(prepareAttachment));
+      const selected = Array.from(files).slice(0, available);
+      selected.forEach((file) => setUploadProgress((current) => ({ ...current, [file.name]: 0 })));
+      const next = await Promise.all(selected.map((file) => prepareAttachment(file, (progress) => {
+        setUploadProgress((current) => ({ ...current, [file.name]: progress }));
+      })));
       setAttachments((current) => [...current, ...next].slice(0, MAX_ATTACHMENTS));
+      setUploadProgress((current) => {
+        const copy = { ...current };
+        selected.forEach((file) => delete copy[file.name]);
+        return copy;
+      });
       if (files.length > available) setAttachmentError(`Only the first ${available} files were added.`);
     } catch (error) {
       setAttachmentError(error instanceof Error ? error.message : "Could not attach that file.");
+      setUploadProgress({});
     }
   }, [attachments.length]);
 
@@ -479,6 +497,7 @@ function ChatWorkspaceInner() {
   /** Open a conversation from the history panel and keep the URL in sync. */
   const selectThread = useCallback(
     (id: string) => {
+      requestAbortRef.current?.abort();
       setActiveId(id);
       if (isMobile) setSidebarOpen(false);
       void navigate({ to: "/workspace", search: { thread: id }, replace: true });
@@ -552,6 +571,8 @@ function ChatWorkspaceInner() {
         updatedAt: Date.now(),
       }));
       setIsSending(true);
+      const controller = new AbortController();
+      requestAbortRef.current = controller;
       // Right-hand workspace opens itself as soon as work starts (desktop).
       if (!isMobile) openWorkspace();
 
@@ -568,6 +589,7 @@ function ChatWorkspaceInner() {
           mode: requestedMode,
           threadId: thread.id,
           attachments: requestAttachments,
+          signal: controller.signal,
         });
         const asstMsg: ChatMessage = {
           id: uid(),
@@ -606,6 +628,14 @@ function ChatWorkspaceInner() {
         if (reply.credits) credits.applyServerBalance(reply.credits);
         else void credits.refresh();
       } catch (error) {
+        if (controller.signal.aborted) {
+          const stopped: ChatMessage = {
+            id: uid(), role: "assistant", content: "_Stopped by you._", createdAt: Date.now(),
+          };
+          updateThread(thread.id, (t) => ({ ...t, messages: [...t.messages, stopped], updatedAt: Date.now() }));
+          void saveMessage({ threadId: thread.id, clientId: stopped.id, role: "assistant", content: stopped.content });
+          return;
+        }
         const apiErr = parseApiError(error, "chat");
         // Server rejected the charge — pull the authoritative balance back in.
         if (apiErr.code === "insufficient_credits" || apiErr.code === "unauthenticated") {
@@ -625,6 +655,7 @@ function ChatWorkspaceInner() {
           updatedAt: Date.now(),
         }));
       } finally {
+        if (requestAbortRef.current === controller) requestAbortRef.current = null;
         setIsSending(false);
       }
     },
@@ -640,6 +671,30 @@ function ChatWorkspaceInner() {
     setAttachmentError(null);
     await sendText(text, active, mode, pendingAttachments);
   };
+
+  const cancelGeneration = useCallback(() => requestAbortRef.current?.abort(), []);
+
+  const applyVoiceDraft = useCallback(() => {
+    const text = `${voiceDraft}${voiceDraft && voice.partialTranscript ? " " : ""}${voice.partialTranscript}`.trim();
+    if (text) setInput((current) => `${current}${current.trim() ? " " : ""}${text}`);
+    setVoiceDraft("");
+    voice.clearPartialTranscript();
+    taRef.current?.focus();
+  }, [voiceDraft, voice]);
+
+  useEffect(() => {
+    const onHotkey = (event: KeyboardEvent) => {
+      if (event.altKey && event.key.toLowerCase() === "m") {
+        event.preventDefault();
+        voice.toggle();
+      } else if (event.key === "Escape" && voice.listening) {
+        event.preventDefault();
+        voice.stop();
+      }
+    };
+    window.addEventListener("keydown", onHotkey);
+    return () => window.removeEventListener("keydown", onHotkey);
+  }, [voice]);
 
   // Prompt handed off from the dashboard hero: consumed exactly once, and always
   // delivered into an empty thread so it never lands mid-conversation.
@@ -673,6 +728,11 @@ function ChatWorkspaceInner() {
   }, [hydrated, sendText, navigate]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      e.preventDefault();
+      void handleSend();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
@@ -1097,6 +1157,16 @@ function ChatWorkspaceInner() {
               <div className="nx-rise mx-auto w-full max-w-3xl px-3 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-3">
                 <div
                   data-testid="composer"
+                  onDragEnter={(event) => { event.preventDefault(); setDraggingFiles(true); }}
+                  onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setDraggingFiles(false);
+                    void addFiles(event.dataTransfer.files);
+                  }}
                   className={cn(
                     "group relative rounded-[26px] border border-ink-200 bg-white",
                     "transition-[box-shadow,border-color,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -1106,6 +1176,15 @@ function ChatWorkspaceInner() {
                     "focus-within:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_22px_50px_-20px_color-mix(in_oklab,var(--color-iris)_50%,transparent)]",
                   )}
                 >
+                  {draggingFiles && (
+                    <div className="pointer-events-none absolute inset-1 z-20 flex items-center justify-center rounded-[22px] border-2 border-dashed border-[color:var(--color-iris)] bg-white/95">
+                      <div className="text-center text-sm font-medium text-ink-800">
+                        <UploadCloud className="mx-auto mb-1.5 h-6 w-6 text-[color:var(--color-iris)]" />
+                        Drop up to {MAX_ATTACHMENTS} images or text/code files
+                        <span className="mt-1 block text-xs font-normal text-ink-500">PNG, JPG, WebP, GIF, TXT, MD, CSV, JSON and source files · 5 MB each</span>
+                      </div>
+                    </div>
+                  )}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1147,6 +1226,38 @@ function ChatWorkspaceInner() {
                           </button>
                         </span>
                       ))}
+                    </div>
+                  )}
+                  {Object.entries(uploadProgress).length > 0 && (
+                    <div className="space-y-1.5 px-4 pt-3 sm:px-5" aria-live="polite">
+                      {Object.entries(uploadProgress).map(([name, progress]) => (
+                        <div key={name} className="text-xs text-ink-600">
+                          <div className="mb-1 flex justify-between gap-3"><span className="truncate">{name}</span><span>{progress}%</span></div>
+                          <div className="h-1 overflow-hidden rounded-full bg-ink-100"><div className="h-full bg-[color:var(--color-iris)] transition-[width]" style={{ width: `${progress}%` }} /></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(voice.listening || voice.partialTranscript || voiceDraft) && (
+                    <div className="mx-4 mt-3 rounded-lg border border-ink-200 bg-ink-50 p-2.5 sm:mx-5">
+                      <div className="mb-1.5 flex items-center justify-between text-xs text-ink-500">
+                        <span>{voice.listening ? "Listening… edit before inserting" : "Voice draft"}</span>
+                        <span className="font-mono">Alt+M · Esc</span>
+                      </div>
+                      <textarea
+                        aria-label="Editable voice transcript"
+                        value={`${voiceDraft}${voiceDraft && voice.partialTranscript ? " " : ""}${voice.partialTranscript}`}
+                        onChange={(event) => {
+                          setVoiceDraft(event.target.value);
+                          voice.clearPartialTranscript();
+                        }}
+                        rows={2}
+                        className="w-full resize-none bg-transparent text-sm text-ink-900 outline-none"
+                      />
+                      <div className="mt-1.5 flex justify-end gap-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => { voice.stop(); voice.clearPartialTranscript(); setVoiceDraft(""); }}>Discard</Button>
+                        <Button type="button" size="sm" onClick={() => { voice.stop(); applyVoiceDraft(); }}>Insert transcript</Button>
+                      </div>
                     </div>
                   )}
                   <textarea
@@ -1248,8 +1359,8 @@ function ChatWorkspaceInner() {
                       </button>
 
                       <SendButton
-                        onClick={() => void handleSend()}
-                        disabled={!input.trim() || isSending}
+                        onClick={isSending ? cancelGeneration : () => void handleSend()}
+                        disabled={!isSending && !input.trim()}
                         loading={isSending}
                       />
                     </div>
@@ -1318,7 +1429,7 @@ function SendButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={loading ? "Sending" : "Send message"}
+      aria-label={loading ? "Stop generation" : "Send message"}
       className={cn(
         "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-95",
         ready
@@ -1328,7 +1439,7 @@ function SendButton({
       style={ready ? { background: "var(--iris-gradient)" } : undefined}
     >
       {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.5} />
+        <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.5} />
       ) : (
         <ArrowUp className="h-4 w-4" strokeWidth={2.75} />
       )}

@@ -166,6 +166,7 @@ interface PreviewContextValue {
   apiError: ApiError | null;
   clearApiError: () => void;
   runAutoFix: () => void;
+  cancelAutoFix: () => void;
   resetAutoFix: () => void;
   // ---- review + history ----
   pendingPatch: PendingPatch | null;
@@ -283,6 +284,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const [revision, setRevision] = useState(0);
   const [activeFile, setActiveFile] = useState<string | null>(null);
   const [liveEdit, setLiveEdit] = useState(true);
+  const fixAbortRef = useRef<AbortController | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selection, setSelection] = useState<PreviewSelection | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
@@ -579,6 +581,8 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixAttempts(attempt);
     setFixStatus("fixing");
     setFixError(null);
+    const controller = new AbortController();
+    fixAbortRef.current = controller;
 
     try {
       // Pre-flight: static build/lint pass gives the model precise, file-scoped
@@ -617,7 +621,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         history: historyRef.current.slice(-3),
         files: current.files,
         entry: current.entry,
-      });
+      }, controller.signal);
 
       const data = (await res.json()) as {
         code?: string;
@@ -696,6 +700,11 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         commitPatch(patch);
       }
     } catch (err) {
+      if (controller.signal.aborted) {
+        setFixStatus("detected");
+        setFixError("Repair canceled.");
+        return;
+      }
       const message = err instanceof Error ? err.message : "Auto-fix failed";
       setApiError((prev) => prev ?? parseApiError(err, "autofix"));
       setFixError(message);
@@ -703,6 +712,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       setFixLog((l) => [...l, { attempt, summary: message, at: Date.now(), ok: false }]);
       setFixStatus("failed");
     } finally {
+      if (fixAbortRef.current === controller) fixAbortRef.current = null;
       busyRef.current = false;
     }
   }, [commitPatch]);
@@ -785,6 +795,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         apiError,
         clearApiError,
         runAutoFix: () => void runAutoFix(),
+        cancelAutoFix: () => fixAbortRef.current?.abort(),
         resetAutoFix,
         pendingPatch,
         applyPendingPatch,

@@ -90,7 +90,7 @@ export const AI_MODELS: AIModel[] = [
 export async function sendChatMessage(
   messages: ChatMessage[],
   modelId?: string,
-  options?: { plan?: string; mode?: string; threadId?: string; attachments?: ChatAttachment[] },
+  options?: { plan?: string; mode?: string; threadId?: string; attachments?: ChatAttachment[]; signal?: AbortSignal },
 ): Promise<{
   content: string;
   model: string;
@@ -120,7 +120,7 @@ export async function sendChatMessage(
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   };
 
-  const res = await apiFetch("/api/chat", payload);
+  const res = await apiFetch("/api/chat", payload, options?.signal);
 
   if (!res.ok) {
     const apiErr = await readApiError(res, "chat");

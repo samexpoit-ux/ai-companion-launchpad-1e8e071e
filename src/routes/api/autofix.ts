@@ -48,7 +48,8 @@ FIX: <one short line describing the change>
 </nexusAction>
 </nexusArtifact>
 - Every emitted file must be COMPLETE (no "...", no diffs, no partial snippets).
-- Allowed imports: react, react-dom, lucide-react, and relative imports to files that exist in the project (or files you create in the same response).
+- Allowed imports: react, react-dom, lucide-react, react-router-dom, react-router, framer-motion, motion, clsx, classnames, tailwind-merge, and relative imports to files that exist in the project (or files you create in the same response).
+- Never use package sub-paths such as react-router-dom/dist or react-router-dom/client, and never replace the router with another package.
 - Keep the original design, structure and Tailwind class usage. Change only what removes the errors.
 - Fix undefined/null access, typos, unclosed JSX, missing exports/imports, wrong hook usage, and broken relative paths.
 - If the errors are only sandbox/network noise, emit no nexusAction blocks and just return the FIX: line.`;
@@ -178,7 +179,7 @@ export const Route = createFileRoute("/api/autofix")({
         const traceId = newTraceId();
         const attempts: TraceAttempt[] = [];
         try {
-          const result = await runWithFallback(route, messages, (a) => attempts.push(a));
+          const result = await runWithFallback(route, messages, (a) => attempts.push(a), request.signal);
           const finalCharge = await finalizeRequestCost(request, charge.id, "autofix", {
             costUsd: result.costUsd,
             inputTokens: result.inputTokens,
@@ -283,6 +284,7 @@ export const Route = createFileRoute("/api/autofix")({
             },
           });
         } catch (err) {
+          if (request.signal.aborted) return new Response(null, { status: 499 });
           await finalizeRequestCost(request, charge.id, "autofix", { failed: true });
           const e = err as Error & { status?: number };
           await recordTrace(request, {

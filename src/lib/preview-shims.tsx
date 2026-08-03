@@ -213,6 +213,12 @@ export const reactRouterDom = {
     ] as const;
   },
   useRouteError: () => null,
+  useNavigation: () => ({ state: "idle", location: undefined, formData: undefined }),
+  useMatch: (pattern: string) => {
+    const { path } = useRouter();
+    const params = matchPath(pattern, path);
+    return params ? { params, pathname: path, pathnameBase: path, pattern: { path: pattern } } : null;
+  },
   createBrowserRouter: () => ({}),
   RouterProvider: MemoryRouter,
 };
