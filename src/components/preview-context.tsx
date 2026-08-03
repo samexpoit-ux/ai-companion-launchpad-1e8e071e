@@ -322,7 +322,10 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixError(null);
     setFixLog([]);
     setPendingPatch(null);
+    lastSignatureRef.current = "";
+    historyRef.current = [];
   }, []);
+
 
   const resetAutoFix = resetFixState;
 
