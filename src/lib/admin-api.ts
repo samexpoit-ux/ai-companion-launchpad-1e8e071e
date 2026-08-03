@@ -527,7 +527,9 @@ export interface UsageRequestRow {
   id: string;
   userId: string;
   email: string | null;
+  displayName: string | null;
   action: string;
+
   tier: string;
   credits: number;
   tokens: number;
