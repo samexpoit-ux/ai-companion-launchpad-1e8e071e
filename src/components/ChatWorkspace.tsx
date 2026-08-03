@@ -204,6 +204,8 @@ function ChatWorkspaceInner() {
   }, []);
   const voice = useVoiceInput(appendTranscript);
 
+  useEffect(() => () => requestAbortRef.current?.abort(), []);
+
   const addFiles = useCallback(async (files: FileList | null) => {
     if (!files?.length) return;
     setAttachmentError(null);
@@ -495,6 +497,7 @@ function ChatWorkspaceInner() {
   /** Open a conversation from the history panel and keep the URL in sync. */
   const selectThread = useCallback(
     (id: string) => {
+      requestAbortRef.current?.abort();
       setActiveId(id);
       if (isMobile) setSidebarOpen(false);
       void navigate({ to: "/workspace", search: { thread: id }, replace: true });
