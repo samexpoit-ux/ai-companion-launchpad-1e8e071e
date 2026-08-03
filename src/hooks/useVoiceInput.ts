@@ -84,5 +84,15 @@ export function useVoiceInput(onTranscript: (text: string) => void) {
     else start();
   }, [listening, start, stop]);
 
-  return { supported, listening, partialTranscript, error, clearError: () => setError(null), start, stop, toggle };
+  return {
+    supported,
+    listening,
+    partialTranscript,
+    error,
+    clearError: () => setError(null),
+    clearPartialTranscript: () => setPartialTranscript(""),
+    start,
+    stop,
+    toggle,
+  };
 }

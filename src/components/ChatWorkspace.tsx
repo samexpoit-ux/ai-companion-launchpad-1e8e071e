@@ -1243,7 +1243,10 @@ function ChatWorkspaceInner() {
                       <textarea
                         aria-label="Editable voice transcript"
                         value={`${voiceDraft}${voiceDraft && voice.partialTranscript ? " " : ""}${voice.partialTranscript}`}
-                        onChange={(event) => setVoiceDraft(event.target.value)}
+                        onChange={(event) => {
+                          setVoiceDraft(event.target.value);
+                          voice.clearPartialTranscript();
+                        }}
                         rows={2}
                         className="w-full resize-none bg-transparent text-sm text-ink-900 outline-none"
                       />
