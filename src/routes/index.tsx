@@ -266,25 +266,26 @@ function LandingPage() {
               className="nx-orbit-reverse absolute inset-12 rounded-full border border-[color:var(--color-orchid)]/25"
             />
 
-            {/* orbiting engine chips */}
+            {/* orbiting engine logos — counter-rotated so each mark stays upright */}
             <span aria-hidden className="nx-orbit absolute inset-0">
               {ENGINES.slice(0, 6).map((engine, i) => {
                 const angle = (i / 6) * Math.PI * 2;
                 return (
                   <span
                     key={engine.name}
-                    className="absolute grid h-8 w-8 place-items-center rounded-xl bg-white text-2xs font-bold shadow-ds-sm ring-1 ring-ink-200"
+                    className="nx-orbit-reverse absolute grid h-9 w-9 place-items-center rounded-2xl bg-white shadow-ds-sm ring-1 ring-ink-200"
                     style={{
-                      left: `calc(50% + ${Math.cos(angle) * 46}% - 1rem)`,
-                      top: `calc(50% + ${Math.sin(angle) * 46}% - 1rem)`,
+                      left: `calc(50% + ${Math.cos(angle) * 46}% - 1.125rem)`,
+                      top: `calc(50% + ${Math.sin(angle) * 46}% - 1.125rem)`,
                       color: engine.accent,
                     }}
                   >
-                    {engine.mono}
+                    <EngineLogo id={engine.id} className="h-4.5 w-4.5" />
                   </span>
                 );
               })}
             </span>
+
 
             <div className="nx-logo-3d relative grid place-items-center">
               <img
