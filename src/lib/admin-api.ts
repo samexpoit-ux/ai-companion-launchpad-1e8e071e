@@ -9,6 +9,8 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
+import { getAdminDirectory, listAdminUsers } from "@/lib/admin-directory.functions";
+
 
 /* ------------------------------------------------------------------ types */
 
@@ -187,6 +189,14 @@ export async function fetchUserStats(): Promise<AdminUserStats> {
 }
 
 export async function listUsers(search = ""): Promise<AdminUserRow[]> {
+  // Preferred path: resolved on the server from the auth directory, so accounts
+  // without a profile row (or blocked by an RLS edge case) still show up.
+  try {
+    return await listAdminUsers({ data: { search } });
+  } catch (error) {
+    console.error("[admin] server user directory failed, falling back", error);
+  }
+
   let q = supabase
     .from("profiles")
     .select("id,email,display_name,plan,created_at,status,suspended_reason,suspended_at")
@@ -201,6 +211,7 @@ export async function listUsers(search = ""): Promise<AdminUserRow[]> {
     console.error("[admin] listUsers failed", profiles.error.message);
     return [];
   }
+
 
   const ids = (profiles.data ?? []).map((p) => p.id);
   if (ids.length === 0) return [];
@@ -516,7 +527,9 @@ export interface UsageRequestRow {
   id: string;
   userId: string;
   email: string | null;
+  displayName: string | null;
   action: string;
+
   tier: string;
   credits: number;
   tokens: number;
@@ -543,7 +556,7 @@ const money = (n: number) => Math.round(n * 1e6) / 1e6;
  */
 export async function fetchUsageReport(days = 30, limit = 500): Promise<UsageReport> {
   const since = daysAgo(days);
-  const [ledger, profiles, settings] = await Promise.all([
+  const [ledger, profiles, settings, directory] = await Promise.all([
     supabase
       .from("credit_ledger")
       .select(
@@ -554,19 +567,37 @@ export async function fetchUsageReport(days = 30, limit = 500): Promise<UsageRep
       .limit(limit),
     supabase.from("profiles").select("id,email,display_name,plan").limit(1000),
     supabase.from("user_settings").select("user_id,plan").limit(1000),
+    // Authoritative identities (auth directory) so cost rows never show a bare UUID.
+    getAdminDirectory().catch((error) => {
+      console.error("[admin] directory lookup failed", error);
+      return [] as { id: string; email: string | null; displayName: string | null; plan: string }[];
+    }),
   ]);
 
   if (ledger.error) console.error("[admin] usage read failed", ledger.error.message);
 
   const profileBy = new Map((profiles.data ?? []).map((p) => [p.id, p]));
   const planBy = new Map((settings.data ?? []).map((s) => [s.user_id, s.plan]));
+  const dirBy = new Map(directory.map((d) => [d.id, d]));
+
+  const identity = (userId: string) => {
+    const d = dirBy.get(userId);
+    const p = profileBy.get(userId);
+    return {
+      email: d?.email ?? p?.email ?? null,
+      displayName: d?.displayName ?? p?.display_name ?? null,
+      plan: planBy.get(userId) ?? d?.plan ?? p?.plan ?? "free",
+    };
+  };
 
   const requests: UsageRequestRow[] = (ledger.data ?? []).map((r) => ({
     id: r.id,
     userId: r.user_id,
-    email: profileBy.get(r.user_id)?.email ?? null,
+    email: identity(r.user_id).email,
+    displayName: identity(r.user_id).displayName,
     action: r.action,
     tier: r.tier,
+
     credits: Number(r.credits ?? 0),
     tokens: Number(r.tokens ?? 0),
     costUsd: Number(r.cost_usd ?? 0),
@@ -580,14 +611,15 @@ export async function fetchUsageReport(days = 30, limit = 500): Promise<UsageRep
 
   const byUser = new Map<string, UsageUserRow>();
   for (const row of requests) {
-    const profile = profileBy.get(row.userId);
+    const who = identity(row.userId);
     const agg =
       byUser.get(row.userId) ??
       ({
         userId: row.userId,
-        email: profile?.email ?? null,
-        displayName: profile?.display_name ?? null,
-        plan: planBy.get(row.userId) ?? profile?.plan ?? "free",
+        email: who.email,
+        displayName: who.displayName,
+        plan: who.plan,
+
         requests: 0,
         credits: 0,
         refunded: 0,

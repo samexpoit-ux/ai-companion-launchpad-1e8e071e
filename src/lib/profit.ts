@@ -25,6 +25,8 @@ export const DEFAULT_PRICE_PER_CREDIT = pricePerCredit("starter") || 0.075;
 export interface ProfitRow {
   key: string;
   label: string;
+  /** Optional secondary line (e.g. the customer's email under their name). */
+  sub?: string;
   requests: number;
   credits: number;
   revenueUsd: number;
@@ -32,6 +34,7 @@ export interface ProfitRow {
   profitUsd: number;
   marginPct: number;
 }
+
 
 export interface ProfitSummary {
   revenueUsd: number;
@@ -71,17 +74,19 @@ function emptyRow(key: string, label: string): ProfitRow {
 function group(
   rows: UsageRequestRow[],
   price: number,
-  keyOf: (r: UsageRequestRow) => { key: string; label: string },
+  keyOf: (r: UsageRequestRow) => { key: string; label: string; sub?: string },
 ): ProfitRow[] {
   const map = new Map<string, ProfitRow>();
   for (const r of rows) {
-    const { key, label } = keyOf(r);
+    const { key, label, sub } = keyOf(r);
     const row = map.get(key) ?? emptyRow(key, label);
+    if (sub) row.sub = sub;
     if (r.credits > 0) row.requests += 1;
     row.credits = round(row.credits + r.credits, 2);
     row.costUsd = round(row.costUsd + r.costUsd);
     map.set(key, row);
   }
+
   return [...map.values()]
     .map((row) => {
       row.revenueUsd = round(row.credits * price);
@@ -123,8 +128,10 @@ export function profitSummary(
     })),
     byUser: group(rows, price, (r) => ({
       key: r.userId,
-      label: r.email ?? r.userId.slice(0, 8),
+      label: r.displayName ?? r.email ?? `Account ${r.userId.slice(0, 8)}`,
+      sub: r.displayName && r.email ? r.email : undefined,
     })).slice(0, 20),
+
     byModel: group(rows, price, (r) => {
       const model = r.upstreamModel ?? r.model ?? "unknown";
       return { key: model, label: model };

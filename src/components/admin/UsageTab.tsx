@@ -137,13 +137,17 @@ export function UsageTab() {
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-ink-900">
-                        {u.email ?? u.displayName ?? u.userId.slice(0, 8)}
+                      <span className="min-w-0 truncate text-sm font-medium text-ink-900">
+                        {u.displayName ?? u.email ?? `Account ${u.userId.slice(0, 8)}`}
+                        {u.displayName && u.email && (
+                          <span className="ml-1.5 font-normal text-ink-500">{u.email}</span>
+                        )}
                       </span>
                       <span className="shrink-0 rounded-full border border-ink-200 px-2 py-0.5 text-[11px] uppercase tracking-wide text-ink-500">
                         {u.plan}
                       </span>
                     </div>
+
                     <dl className="mt-1.5 grid grid-cols-4 gap-2 text-[11px] text-ink-500">
                       <Cell label="reqs" value={String(u.requests)} />
                       <Cell label="credits" value={formatCredits(u.credits)} />
@@ -168,9 +172,10 @@ export function UsageTab() {
               Per-request breakdown
               {selectedUser && (
                 <span className="ml-1.5 font-normal text-ink-500">
-                  — {selectedUser.email ?? selectedUser.userId.slice(0, 8)}
+                  — {selectedUser.displayName ?? selectedUser.email ?? `Account ${selectedUser.userId.slice(0, 8)}`}
                 </span>
               )}
+
             </h2>
             {selected && (
               <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
@@ -206,8 +211,9 @@ export function UsageTab() {
                     </td>
                     {!selected && (
                       <td className="max-w-[12rem] truncate px-4 py-2.5 text-xs text-ink-600">
-                        {r.email ?? r.userId.slice(0, 8)}
+                        {r.displayName ?? r.email ?? `Account ${r.userId.slice(0, 8)}`}
                       </td>
+
                     )}
                     <td className="px-4 py-2.5 text-ink-900">
                       {actionLabel(r.action)}
