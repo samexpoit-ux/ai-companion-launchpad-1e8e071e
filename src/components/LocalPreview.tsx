@@ -301,6 +301,7 @@ interface Props {
 export default function LocalPreview({ payload, device, reloadKey }: Props) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const rootRef = useRef<ReactDOMClient.Root | null>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
   const { reportRuntimeError, reportConsole, setBuildError, selectMode, setSelection } =
     usePreview();
   const [compileError, setCompileError] = useState<string | null>(null);
@@ -377,8 +378,15 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
       void injectTailwind(doc);
 
 
-      // Pipe sandbox errors into the auto-fix loop.
+      // Pipe sandbox errors into the auto-fix loop. Incremental reloads reuse
+      // the same document, so instrument its console exactly once — otherwise
+      // every reload would wrap the wrapper and report each error N times.
+      const flagged = win as unknown as { __nexuraInstrumented?: boolean };
       const frameConsole = (win as unknown as { console: Console }).console;
+      if (flagged.__nexuraInstrumented) {
+        /* already piped */
+      } else {
+      flagged.__nexuraInstrumented = true;
       for (const level of ["log", "info", "warn", "error"] as const) {
         const native = frameConsole[level].bind(frameConsole);
         frameConsole[level] = (...args: unknown[]) => {
@@ -404,6 +412,11 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
       win.addEventListener("unhandledrejection", (e) =>
         reportRuntimeError(String((e as PromiseRejectionEvent).reason)),
       );
+      }
+
+      // Drop stylesheets injected by the previous build so repeated reloads do
+      // not stack duplicate (and stale) project CSS.
+      doc.querySelectorAll("style[data-nexura-project-css]").forEach((el) => el.remove());
 
       const host = doc.getElementById("root");
       if (!host) return;
@@ -439,8 +452,13 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
 
         if (!Component) throw new Error("No React component was exported from this project.");
 
-        rootRef.current?.unmount();
-        rootRef.current = ReactDOMClient.createRoot(host);
+        // Reuse the existing root when the frame document survived: React then
+        // reconciles in place instead of tearing the tree down and repainting.
+        if (!rootRef.current || hostRef.current !== host) {
+          if (hostRef.current && hostRef.current !== host) rootRef.current?.unmount();
+          rootRef.current = ReactDOMClient.createRoot(host);
+          hostRef.current = host;
+        }
         rootRef.current.render(
           React.createElement(
             PreviewErrorBoundary,
@@ -461,9 +479,6 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
     return () => {
       cancelled = true;
       frame.removeEventListener("load", mount);
-      const root = rootRef.current;
-      rootRef.current = null;
-      if (root) setTimeout(() => root.unmount(), 0);
     };
   }, [
     payload.code,
@@ -476,6 +491,22 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
     reportRuntimeError,
     setBuildError,
   ]);
+
+  // Tear the root down only when the preview component unmounts.
+  useEffect(
+    () => () => {
+      const root = rootRef.current;
+      rootRef.current = null;
+      hostRef.current = null;
+      if (root) setTimeout(() => root.unmount(), 0);
+    },
+    [],
+  );
+
+  // Warm Tailwind + fonts as soon as the engine loads.
+  useEffect(() => {
+    prefetchPreviewAssets();
+  }, []);
 
   // Static HTML previews are Tailwind-authored too, so give them the compiler.
   useEffect(() => {
@@ -551,7 +582,11 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
 
   const frame = (
     <iframe
-      key={`${payload.lang}-${reloadKey}`}
+      // React previews render into a stable document (BASE_HTML), so the frame
+      // is intentionally NOT keyed on reloadKey: a rebuild re-renders in place
+      // instead of recreating the document, which keeps Tailwind, fonts and
+      // scroll position warm. Non-React docs still need a fresh document.
+      key={isReact ? `react-${payload.lang}` : `${payload.lang}-${reloadKey}`}
       ref={frameRef}
       title="Live preview"
       srcDoc={srcDoc}
