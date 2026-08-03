@@ -213,6 +213,12 @@ interface PreviewContextValue {
   clearFixSkip: () => void;
   /** Credits the last repair actually consumed (server-reported). */
   fixCharge: FixCharge | null;
+  /**
+   * Recent user requests from the conversation. The fixer sends them along so a
+   * patch respects what the user actually asked for instead of only reacting to
+   * the stack trace.
+   */
+  setFixIntent: (notes: string[]) => void;
   reviewBeforeApply: boolean;
   setReviewBeforeApply: (v: boolean) => void;
   fixStatus: FixStatus;
@@ -407,6 +413,13 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     [patchSettings],
   );
   const clearFixSkip = useCallback(() => setFixSkip(null), []);
+  const intentRef = useRef<string[]>([]);
+  const setFixIntent = useCallback((notes: string[]) => {
+    intentRef.current = notes
+      .map((n) => n.trim().slice(0, 400))
+      .filter(Boolean)
+      .slice(-3);
+  }, []);
   const [fixStatus, setFixStatus] = useState<FixStatus>("idle");
   const [fixAttempts, setFixAttempts] = useState(0);
   const [fixLog, setFixLog] = useState<FixEntry[]>([]);
@@ -773,6 +786,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         attempt,
         persisted,
         history: historyRef.current.slice(-3),
+        intent: intentRef.current,
         files: current.files,
         entry: current.entry,
       }, controller.signal);
@@ -979,6 +993,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         fixSkip,
         clearFixSkip,
         fixCharge,
+        setFixIntent,
         reviewBeforeApply,
         setReviewBeforeApply,
         fixStatus,

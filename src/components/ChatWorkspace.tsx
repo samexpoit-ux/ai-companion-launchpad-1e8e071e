@@ -624,7 +624,17 @@ function ChatWorkspaceInner() {
         // Lovable behaviour: a generated project loads straight into the
         // right-hand live workspace, no extra click.
         const generated = parseArtifacts(reply.content)[0];
-        if (generated) openProject(generated);
+        if (generated) {
+          openProject(generated);
+          // Give the repair loop the conversation's intent so a fix keeps the
+          // feature the user asked for instead of just silencing the error.
+          setFixIntent(
+            [...(thread.messages ?? []), userMsg]
+              .filter((m) => m.role === "user")
+              .slice(-3)
+              .map((m) => m.content),
+          );
+        }
         if (reply.credits) credits.applyServerBalance(reply.credits);
         else void credits.refresh();
       } catch (error) {

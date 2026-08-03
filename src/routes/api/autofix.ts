@@ -22,6 +22,8 @@ interface AutofixBody {
   persisted?: boolean;
   /** What earlier attempts in this session tried, newest last. */
   history?: Array<{ attempt?: number; summary?: string; ok?: boolean }>;
+  /** Recent user requests from the conversation, newest last. */
+  intent?: string[];
 }
 
 const FIX_SYSTEM = `You are Nexura AI Auto-Fix — an expert runtime debugger.
@@ -130,6 +132,17 @@ export const Route = createFileRoute("/api/autofix")({
                   `${h.attempt ?? i + 1}. ${h.ok === false ? "[failed] " : ""}${String(h.summary ?? "").slice(0, 300)}`,
               )
           : [];
+        const intent = Array.isArray(body.intent)
+          ? body.intent.filter((v) => typeof v === "string" && v.trim()).slice(-3)
+          : [];
+        const intentNotes = intent.length
+          ? [
+              "",
+              "What the user asked this project to do (newest last) — preserve this intent while fixing:",
+              intent.map((v, i) => `${i + 1}. ${v.slice(0, 400)}`).join("\n"),
+            ]
+          : [];
+
         const retryNotes = [
           ...(history.length
             ? ["", "Previous repair attempts in this session:", history.join("\n")]
@@ -149,6 +162,7 @@ export const Route = createFileRoute("/api/autofix")({
               "",
               "Console errors captured in the live preview:",
               errors.map((e, i) => `${i + 1}. ${e}`).join("\n"),
+              ...intentNotes,
               ...retryNotes,
               "",
               "Project files:",
@@ -162,6 +176,7 @@ export const Route = createFileRoute("/api/autofix")({
               "",
               "Console errors captured in the live preview:",
               errors.map((e, i) => `${i + 1}. ${e}`).join("\n"),
+              ...intentNotes,
               ...retryNotes,
               "",
               "Current file:",
