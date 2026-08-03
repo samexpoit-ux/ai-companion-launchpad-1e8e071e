@@ -25,6 +25,8 @@ export const DEFAULT_PRICE_PER_CREDIT = pricePerCredit("starter") || 0.075;
 export interface ProfitRow {
   key: string;
   label: string;
+  /** Optional secondary line (e.g. the customer's email under their name). */
+  sub?: string;
   requests: number;
   credits: number;
   revenueUsd: number;
@@ -32,6 +34,7 @@ export interface ProfitRow {
   profitUsd: number;
   marginPct: number;
 }
+
 
 export interface ProfitSummary {
   revenueUsd: number;
