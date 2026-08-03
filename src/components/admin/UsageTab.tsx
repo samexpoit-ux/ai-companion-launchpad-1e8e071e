@@ -137,13 +137,17 @@ export function UsageTab() {
                     }`}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-ink-900">
-                        {u.email ?? u.displayName ?? u.userId.slice(0, 8)}
+                      <span className="min-w-0 truncate text-sm font-medium text-ink-900">
+                        {u.displayName ?? u.email ?? `Account ${u.userId.slice(0, 8)}`}
+                        {u.displayName && u.email && (
+                          <span className="ml-1.5 font-normal text-ink-500">{u.email}</span>
+                        )}
                       </span>
                       <span className="shrink-0 rounded-full border border-ink-200 px-2 py-0.5 text-[11px] uppercase tracking-wide text-ink-500">
                         {u.plan}
                       </span>
                     </div>
+
                     <dl className="mt-1.5 grid grid-cols-4 gap-2 text-[11px] text-ink-500">
                       <Cell label="reqs" value={String(u.requests)} />
                       <Cell label="credits" value={formatCredits(u.credits)} />
