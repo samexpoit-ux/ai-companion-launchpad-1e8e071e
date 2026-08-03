@@ -625,7 +625,7 @@ function ChatWorkspaceInner() {
         if (reply.credits) credits.applyServerBalance(reply.credits);
         else void credits.refresh();
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (controller.signal.aborted) {
           const stopped: ChatMessage = {
             id: uid(), role: "assistant", content: "_Stopped by you._", createdAt: Date.now(),
           };
