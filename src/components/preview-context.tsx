@@ -283,7 +283,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const [runtimeErrors, setRuntimeErrors] = useState<string[]>([]);
   const [consoleEntries, setConsoleEntries] = useState<Array<{ id: number; level: "log" | "info" | "warn" | "error"; message: string }>>([]);
   const [autoFixEnabled, setAutoFixEnabled] = useState(true);
-  const [reviewBeforeApply, setReviewBeforeApply] = useState(true);
+  const [reviewBeforeApply, setReviewBeforeApply] = useState(false);
   const [fixStatus, setFixStatus] = useState<FixStatus>("idle");
   const [fixAttempts, setFixAttempts] = useState(0);
   const [fixLog, setFixLog] = useState<FixEntry[]>([]);
@@ -641,6 +641,21 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       } else {
         next = { ...current, code: data.code!, files: undefined, entry: undefined };
         changedPaths = ["snippet"];
+      }
+
+      // Never apply a patch that still fails the same parser/import checks. This
+      // keeps a bad AI response from replacing the last usable preview.
+      const { validateProject, validateSingle } = await import("@/lib/validate");
+      const validation = next.files
+        ? await validateProject(next.files, next.entry)
+        : await validateSingle(next.code, next.lang);
+      if (!validation.ok) {
+        const diagnostic = validation.issues
+          .filter((issue) => issue.level === "error")
+          .slice(0, 3)
+          .map((issue) => `${issue.path}${issue.line ? `:${issue.line}` : ""} — ${issue.message}`)
+          .join("; ");
+        throw new Error(`Proposed patch did not pass validation: ${diagnostic}`);
       }
 
       const patch: PendingPatch = {

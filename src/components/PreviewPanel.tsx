@@ -415,7 +415,9 @@ export function PreviewPanel() {
             />
           ) : null}
 
-          {buildError && !pendingPatch && (
+          {buildError &&
+            !pendingPatch &&
+            (!autoFixEnabled || fixStatus === "failed" || fixStatus === "exhausted") && (
             <Suspense fallback={null}>
               <ErrorOverlay onReload={() => setReloadKey((k) => k + 1)} />
             </Suspense>

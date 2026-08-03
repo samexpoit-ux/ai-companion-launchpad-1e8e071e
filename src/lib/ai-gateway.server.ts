@@ -48,6 +48,10 @@ export interface ResolvedRoute {
   fallbacks: string[];
 }
 
+export type GatewayMessageContent =
+  | string
+  | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+
 export function openRouterConfig(): OpenRouterConfig | null {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return null;
@@ -202,7 +206,7 @@ function maxTokensFor(model: string, task: TaskKind): number {
 export async function callChatCompletion(
   config: OpenRouterConfig,
   upstreamModel: string,
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
   task: TaskKind = "chat",
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number }> {
   const res = await fetch(`${config.baseURL}/chat/completions`, {
@@ -256,7 +260,7 @@ export async function callChatCompletion(
 /** Run the primary model, then walk the fallback chain on failure. */
 export async function runWithFallback(
   route: ResolvedRoute,
-  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
   onAttempt?: (attempt: { model: string; ok: boolean; ms: number; error?: string }) => void,
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number; upstream: string }> {
   const chain = [route.upstream, ...route.fallbacks];
