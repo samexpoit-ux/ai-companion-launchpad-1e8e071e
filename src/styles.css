@@ -666,3 +666,58 @@
 @media (prefers-reduced-motion: reduce) {
   .nx-rise, .nx-pop { animation: none; }
 }
+
+/* ---- Landing page: 3D logo, engine marquee, gradient text ---- */
+@keyframes nx-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotateX(8deg) rotateY(-12deg); }
+  50%      { transform: translate3d(0, -12px, 0) rotateX(-4deg) rotateY(12deg); }
+}
+
+@keyframes nx-orbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes nx-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes nx-beam {
+  0%   { opacity: 0.25; transform: translateY(-30%); }
+  50%  { opacity: 0.7; }
+  100% { opacity: 0.25; transform: translateY(30%); }
+}
+
+@utility nx-logo-3d {
+  transform-style: preserve-3d;
+  animation: nx-float 9s ease-in-out infinite;
+  filter: drop-shadow(0 26px 42px rgba(37, 74, 140, 0.35));
+}
+
+@utility nx-orbit {
+  animation: nx-orbit 18s linear infinite;
+}
+
+@utility nx-orbit-reverse {
+  animation: nx-orbit 26s linear infinite reverse;
+}
+
+@utility nx-marquee {
+  animation: nx-marquee 32s linear infinite;
+}
+
+@utility nx-beam {
+  animation: nx-beam 6s ease-in-out infinite;
+}
+
+@utility nx-gradient-text {
+  background: var(--iris-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-logo-3d, .nx-orbit, .nx-orbit-reverse, .nx-marquee, .nx-beam { animation: none; }
+}
