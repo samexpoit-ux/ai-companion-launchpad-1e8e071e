@@ -271,7 +271,9 @@ class MotionValue<T = number> {
   }
   on(_event: string, cb: Listener) {
     this.listeners.add(cb);
-    return () => this.listeners.delete(cb);
+    return () => {
+      this.listeners.delete(cb);
+    };
   }
   onChange(cb: Listener) {
     return this.on("change", cb);
