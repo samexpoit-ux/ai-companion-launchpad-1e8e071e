@@ -144,6 +144,7 @@ function ChatWorkspaceInner() {
     openWorkspace,
     openProject,
     clearProject,
+    setFixIntent,
   } = usePreview();
   const isMobile = useIsMobile();
 
