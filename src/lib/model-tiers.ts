@@ -9,7 +9,8 @@
  * BOTH input and output. Verified against the live OpenRouter catalogue:
  *   openai/gpt-5.6-luna-pro      $0.10  / $0.60   1.05M ctx  (build primary)
  *   deepseek/deepseek-v4-flash   $0.14  / $0.28   1.05M ctx  (build #2 + chat)
- *   deepseek/deepseek-v4-flash-0731 $0.09 / $0.18           (cheapest flash)
+ *   deepseek/deepseek-v4-flash-0731 $0.09 / $0.18           (paid chat)
+ *   nvidia/nemotron-3-nano-30b-a3b $0.05 / $0.20             (cheapest, fast)
  *   qwen/qwen3-coder-next        $0.12  / $0.80   262K ctx
  *   kwaipilot/kat-coder-air-v2.5 $0.15  / $0.60   256K ctx
  *   deepseek/deepseek-v4-pro     $0.435 / $0.87   1.05M ctx  (deep reasoning)
@@ -42,9 +43,9 @@ export const CODING_TERTIARY = "qwen/qwen3-coder-next";
 export const CODING_BUDGET = "kwaipilot/kat-coder-air-v2.5";
 
 /** Cheap tier — paid chat. */
-export const CHEAP_CHAT = "deepseek/deepseek-v4-flash";
+export const CHEAP_CHAT = "deepseek/deepseek-v4-flash-0731";
 /** Ultra-cheap tier — greetings, titles, one-liners. */
-export const NANO_CHAT = "deepseek/deepseek-v4-flash-0731";
+export const NANO_CHAT = "nvidia/nemotron-3-nano-30b-a3b";
 /** Cheap Google model for plans / architecture (multimodal, sub-$1). */
 export const CHEAP_PLAN = "google/gemini-2.5-flash-lite";
 /** Cheap non-Google chat alternative. */

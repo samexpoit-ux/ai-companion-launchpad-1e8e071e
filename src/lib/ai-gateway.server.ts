@@ -15,6 +15,7 @@
 import {
   CHEAP_CHAT,
   CODING_PRIMARY,
+  CHEAP_PLAN,
   CODING_SECONDARY,
   CODING_TERTIARY,
   NANO_CHAT,
@@ -70,7 +71,7 @@ export const MODEL_ROUTES: Record<string, { upstream: string; task: TaskKind }> 
   "nx-builder": { upstream: CODING_PRIMARY, task: "code" },
   "nx-reasoner": { upstream: CODING_PRIMARY, task: "reason" },
   "nx-flash": { upstream: CHEAP_CHAT, task: "fast" },
-  "nx-vision": { upstream: CODING_SECONDARY, task: "chat" },
+  "nx-vision": { upstream: CHEAP_PLAN, task: "chat" },
 };
 
 /** Cheap tier first, expensive tier only for heavy work. */
