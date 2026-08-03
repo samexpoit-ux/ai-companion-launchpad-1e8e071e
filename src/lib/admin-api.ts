@@ -189,6 +189,14 @@ export async function fetchUserStats(): Promise<AdminUserStats> {
 }
 
 export async function listUsers(search = ""): Promise<AdminUserRow[]> {
+  // Preferred path: resolved on the server from the auth directory, so accounts
+  // without a profile row (or blocked by an RLS edge case) still show up.
+  try {
+    return await listAdminUsers({ data: { search } });
+  } catch (error) {
+    console.error("[admin] server user directory failed, falling back", error);
+  }
+
   let q = supabase
     .from("profiles")
     .select("id,email,display_name,plan,created_at,status,suspended_reason,suspended_at")
@@ -203,6 +211,7 @@ export async function listUsers(search = ""): Promise<AdminUserRow[]> {
     console.error("[admin] listUsers failed", profiles.error.message);
     return [];
   }
+
 
   const ids = (profiles.data ?? []).map((p) => p.id);
   if (ids.length === 0) return [];
