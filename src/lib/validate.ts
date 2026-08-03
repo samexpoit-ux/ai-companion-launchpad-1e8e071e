@@ -35,6 +35,8 @@ const EXTERNAL_MODULES = new Set([
   "framer-motion",
   "motion",
   "motion/react",
+  "motion/react-client",
+  "react/jsx-dev-runtime",
   "clsx",
   "classnames",
   "tailwind-merge",
@@ -47,7 +49,10 @@ const IMPORT_RE = /(?:^|\n)\s*import\s+(?:[^'"]*?from\s*)?["']([^"']+)["']/g;
 const REQUIRE_RE = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
 
 function isPreviewExternal(id: string) {
-  return EXTERNAL_MODULES.has(id) || id.startsWith("react-router-dom/") || id.startsWith("react-router/");
+  if (EXTERNAL_MODULES.has(id)) return true;
+  // sub-path imports of shimmed packages resolve to the same shim in the sandbox
+  const base = id.split("/")[0];
+  return EXTERNAL_MODULES.has(base);
 }
 
 function lineOf(source: string, index: number) {

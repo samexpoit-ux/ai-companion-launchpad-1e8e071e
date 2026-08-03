@@ -79,12 +79,38 @@ function ensureDefaultExport(src: string): string {
   return `${src}\n\nexport default function App(){ return null; }\n`;
 }
 
+/**
+ * Unknown icon names render a neutral square instead of crashing the tree with
+ * "Element type is invalid" — the most common preview failure after a model
+ * invents an icon that does not exist in the installed lucide version.
+ */
+const lucideShim = new Proxy(LucideIcons as unknown as Record<string, unknown>, {
+  get: (target, prop: string) => {
+    if (prop in target) return target[prop];
+    if (prop === "__esModule") return true;
+    const Fallback = (props: Record<string, unknown>) =>
+      React.createElement("svg", {
+        ...props,
+        width: (props.size as number) ?? 24,
+        height: (props.size as number) ?? 24,
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: 2,
+        "aria-hidden": true,
+      });
+    (Fallback as React.ComponentType).displayName = `Lucide(${prop})`;
+    return Fallback;
+  },
+});
+
 const EXTERNALS: Record<string, unknown> = {
   react: React,
   "react/jsx-runtime": React,
+  "react/jsx-dev-runtime": React,
   "react-dom": ReactDOMClient,
   "react-dom/client": ReactDOMClient,
-  "lucide-react": LucideIcons,
+  "lucide-react": lucideShim,
   // Shimmed dependencies: generated projects commonly import these, and the
   // sandbox has no bundler, so we hand them API-compatible stand-ins instead of
   // failing the build. Exported projects install the real packages.
@@ -93,22 +119,36 @@ const EXTERNALS: Record<string, unknown> = {
   "framer-motion": framerMotion,
   motion: framerMotion,
   "motion/react": framerMotion,
+  "motion/react-client": framerMotion,
   clsx: classNameShims.clsx,
   classnames: classNameShims.clsx,
   "tailwind-merge": classNameShims.twMerge,
 };
 
+/** Resolve a bare package id (including sub-paths) to a shimmed module. */
+function resolveExternal(id: string): unknown | undefined {
+  const normalized = id.trim().replace(/\/$/, "");
+  if (normalized in EXTERNALS) return EXTERNALS[normalized];
+  const base = normalized.split("/")[0];
+  if (base === "react-router-dom" || base === "react-router") return reactRouterDom;
+  if (base === "framer-motion" || base === "motion") return framerMotion;
+  if (base === "lucide-react") return lucideShim;
+  if (base === "clsx" || base === "classnames") return classNameShims.clsx;
+  if (base === "tailwind-merge") return classNameShims.twMerge;
+  return undefined;
+}
+
 function makeRequire() {
   return (id: string) => {
-    const normalized = id.trim().replace(/\/$/, "");
-    if (normalized in EXTERNALS) return EXTERNALS[normalized];
-    if (normalized.startsWith("react-router-dom/")) return reactRouterDom;
-    if (/\.(css|scss|sass|less)$/.test(normalized)) return {};
+    const external = resolveExternal(id);
+    if (external !== undefined) return external;
+    if (/\.(css|scss|sass|less)$/.test(id)) return {};
     throw new Error(
       `Module "${id}" is not available in the live preview. Available: react, react-dom, lucide-react, react-router-dom, framer-motion, clsx, tailwind-merge.`,
     );
   };
 }
+
 
 function compileModule(path: string, source: string) {
   return transform(source, {
@@ -155,7 +195,8 @@ function runProject(
     cache.set(path, mod.exports);
 
     const req = (id: string) => {
-      if (id in EXTERNALS) return EXTERNALS[id];
+      const external = resolveExternal(id);
+      if (external !== undefined) return external;
       const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
       if (resolved) return load(resolved);
       if (/\.(css|scss|sass|less)$/.test(id)) return {};

@@ -237,6 +237,24 @@ const IGNORED = [
 ];
 
 
+/**
+ * Faults that come from the preview sandbox itself (an unmodelled shim export,
+ * a package we do not bundle) rather than from the generated code. Sending
+ * these to the model wastes credits and can never succeed, so the fixer
+ * self-heals instead: reload the sandbox, keep the code, log what happened.
+ */
+const SANDBOX_FAULT = [
+  /_framerMotion\./,
+  /_reactRouterDom\./,
+  /_lucideReact\./,
+  /_motion\w*\.\w+ is not a function/,
+  /is not available in the live preview/i,
+];
+
+function isSandboxFault(message: string) {
+  return SANDBOX_FAULT.some((re) => re.test(message));
+}
+
 function isNoise(message: string) {
   const m = message.trim();
   if (m.length < 4) return true;
@@ -572,6 +590,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, []);
 
 
+  // How many times each sandbox-level fault has already been self-healed.
+  const sandboxHealRef = useRef<Map<string, number>>(new Map());
+
   const runAutoFix = useCallback(async () => {
     const current = payloadRef.current;
     if (!current || busyRef.current) return;
@@ -604,6 +625,29 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
       const errors = [...new Set([...staticIssues, ...errorsRef.current])].slice(0, 10);
       if (errors.length === 0) {
+        setFixStatus("fixed");
+        return;
+      }
+
+      // Environment faults never reach the model — reload the sandbox instead.
+      if (errors.every(isSandboxFault)) {
+        const key = errorSignature(errors);
+        const healed = sandboxHealRef.current.get(key) ?? 0;
+        sandboxHealRef.current.set(key, healed + 1);
+        setRuntimeErrors([]);
+        setFixLog((l) => [
+          ...l,
+          {
+            attempt,
+            summary: "Preview sandbox reloaded (environment issue, no code change needed)",
+            at: Date.now(),
+            ok: true,
+          },
+        ]);
+        // Reload at most once per distinct fault so a shim gap can never turn
+        // into an endless reload loop.
+        if (healed === 0) setRevision((r) => r + 1);
+        setFixAttempts(0);
         setFixStatus("fixed");
         return;
       }
