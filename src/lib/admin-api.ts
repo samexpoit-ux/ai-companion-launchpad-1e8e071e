@@ -556,7 +556,7 @@ const money = (n: number) => Math.round(n * 1e6) / 1e6;
  */
 export async function fetchUsageReport(days = 30, limit = 500): Promise<UsageReport> {
   const since = daysAgo(days);
-  const [ledger, profiles, settings] = await Promise.all([
+  const [ledger, profiles, settings, directory] = await Promise.all([
     supabase
       .from("credit_ledger")
       .select(
@@ -567,19 +567,37 @@ export async function fetchUsageReport(days = 30, limit = 500): Promise<UsageRep
       .limit(limit),
     supabase.from("profiles").select("id,email,display_name,plan").limit(1000),
     supabase.from("user_settings").select("user_id,plan").limit(1000),
+    // Authoritative identities (auth directory) so cost rows never show a bare UUID.
+    getAdminDirectory().catch((error) => {
+      console.error("[admin] directory lookup failed", error);
+      return [] as { id: string; email: string | null; displayName: string | null; plan: string }[];
+    }),
   ]);
 
   if (ledger.error) console.error("[admin] usage read failed", ledger.error.message);
 
   const profileBy = new Map((profiles.data ?? []).map((p) => [p.id, p]));
   const planBy = new Map((settings.data ?? []).map((s) => [s.user_id, s.plan]));
+  const dirBy = new Map(directory.map((d) => [d.id, d]));
+
+  const identity = (userId: string) => {
+    const d = dirBy.get(userId);
+    const p = profileBy.get(userId);
+    return {
+      email: d?.email ?? p?.email ?? null,
+      displayName: d?.displayName ?? p?.display_name ?? null,
+      plan: planBy.get(userId) ?? d?.plan ?? p?.plan ?? "free",
+    };
+  };
 
   const requests: UsageRequestRow[] = (ledger.data ?? []).map((r) => ({
     id: r.id,
     userId: r.user_id,
-    email: profileBy.get(r.user_id)?.email ?? null,
+    email: identity(r.user_id).email,
+    displayName: identity(r.user_id).displayName,
     action: r.action,
     tier: r.tier,
+
     credits: Number(r.credits ?? 0),
     tokens: Number(r.tokens ?? 0),
     costUsd: Number(r.cost_usd ?? 0),
