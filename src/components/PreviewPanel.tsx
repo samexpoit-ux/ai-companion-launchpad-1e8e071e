@@ -135,6 +135,13 @@ export function PreviewPanel() {
     setReloadKey((k) => k + 1);
   }, [revision]);
 
+  // Prefetch the preview engine chunk + Tailwind/fonts as soon as the
+  // workspace opens, so switching to the Preview tab paints immediately.
+  useEffect(() => {
+    if (!isOpen) return;
+    void import("./LocalPreview").then((mod) => mod.prefetchPreviewAssets());
+  }, [isOpen]);
+
   // A repair is billable, so the meter follows the server's authoritative
   // balance from the /api/autofix response instead of a client-side guess.
   useEffect(() => {
