@@ -38,7 +38,9 @@ import { CreditMeter } from "@/components/CreditMeter";
 import { formatCredits } from "@/lib/credits";
 import {
   usePreview,
-  MAX_FIX_ATTEMPTS,
+  FIX_ATTEMPT_CHOICES,
+  type FixCharge,
+  type FixSkip,
   type PreviewPayload,
   type PreviewDevice,
 } from "./preview-context";
@@ -74,6 +76,11 @@ export function PreviewPanel() {
     runtimeErrors,
     autoFixEnabled,
     setAutoFixEnabled,
+    maxFixAttempts,
+    setMaxFixAttempts,
+    fixSkip,
+    clearFixSkip,
+    fixCharge,
     fixStatus,
     fixAttempts,
     fixLog,
@@ -125,15 +132,23 @@ export function PreviewPanel() {
     setReloadKey((k) => k + 1);
   }, [revision]);
 
+  // A repair is billable, so the meter follows the server's authoritative
+  // balance from the /api/autofix response instead of a client-side guess.
+  useEffect(() => {
+    if (!fixCharge) return;
+    credits.applyServerBalance(fixCharge);
+  }, [fixCharge, credits]);
+
   const chargedAutoFix = useCallback(async () => {
     if (!credits.canAfford("autofix")) {
       setRunError("Not enough credits for an auto-fix attempt.");
       return;
     }
+    clearFixSkip();
     // The /api/autofix route charges the account server-side; refresh after.
     runAutoFix();
     void credits.refresh();
-  }, [credits, runAutoFix]);
+  }, [credits, runAutoFix, clearFixSkip]);
 
   if (!isOpen) return null;
   // The details timeline replaces the workspace until "Back to latest".
@@ -338,6 +353,31 @@ export function PreviewPanel() {
                   {autoFixEnabled ? "On" : "Off"}
                 </span>
               </DropdownMenuItem>
+              <div className="flex items-center gap-1 px-2 py-1.5">
+                <span className="mr-auto text-xs text-ink-600">Max retries</span>
+                {FIX_ATTEMPT_CHOICES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setMaxFixAttempts(n)}
+                    aria-pressed={maxFixAttempts === n}
+                    title={`Stop automatic repair after ${n} attempt${n > 1 ? "s" : ""}`}
+                    className={cn(
+                      "h-6 w-6 rounded-md border text-2xs font-semibold transition",
+                      maxFixAttempts === n
+                        ? "border-[color:var(--color-iris)]/45 bg-[color:var(--color-iris)]/12 text-[color:var(--color-iris)]"
+                        : "border-ink-200 text-ink-500 hover:bg-ink-900/5",
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div className="px-2 pb-1.5 text-2xs leading-snug text-ink-500">
+                Each AI repair spends credits ({formatCredits(credits.quote("autofix"))} per attempt).
+                Sandbox-only faults are healed for free.
+              </div>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setHistoryOpen((h) => !h)}>
                 <History className="mr-2 h-3.5 w-3.5" />
                 Patch history
@@ -365,6 +405,11 @@ export function PreviewPanel() {
       <AutoFixBar
         status={fixStatus}
         attempts={fixAttempts}
+        limit={maxFixAttempts}
+        enabled={autoFixEnabled}
+        skip={fixSkip}
+        charge={fixCharge}
+        onToggleEnabled={() => setAutoFixEnabled(!autoFixEnabled)}
         errors={runtimeErrors}
         log={fixLog}
         error={fixError}
