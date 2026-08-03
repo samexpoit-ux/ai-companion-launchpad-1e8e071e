@@ -194,6 +194,12 @@ function LandingPage() {
             >
               Engines
             </a>
+            <a
+              href="#pricing"
+              className="hidden rounded-xl px-3 py-2 text-sm text-ink-600 transition hover:bg-ink-100 hover:text-ink-900 sm:block"
+            >
+              Pricing
+            </a>
             <Button asChild size="sm">
               <Link to="/auth">Start free</Link>
             </Button>
@@ -293,14 +299,17 @@ function LandingPage() {
             </span>
 
 
-            <div className="nx-logo-3d relative grid place-items-center">
+            <div className="nx-logo-stage relative grid place-items-center">
+              <span aria-hidden className="nx-logo-halo absolute h-40 w-40 rounded-full" />
+              <div className="nx-logo-3d relative grid place-items-center">
               <img
                 src={nexuraLogo}
                 alt="Nexura AI logo"
                 width={168}
                 height={168}
-                className="h-32 w-32 object-contain sm:h-40 sm:w-40"
-              />
+                  className="h-32 w-32 object-contain sm:h-40 sm:w-40"
+                />
+              </div>
             </div>
 
             <div className="absolute -bottom-2 rounded-2xl border border-ink-200 bg-white/90 px-3 py-1.5 text-2xs font-semibold uppercase tracking-wider text-ink-600 shadow-ds-sm backdrop-blur">
