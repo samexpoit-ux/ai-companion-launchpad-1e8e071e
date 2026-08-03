@@ -10,6 +10,7 @@ import {
   Route as RouteIcon,
   ScrollText,
   ShieldAlert,
+  Ticket,
   TrendingUp,
   ShieldCheck,
   SlidersHorizontal,
@@ -22,6 +23,7 @@ import { UsersTab } from "@/components/admin/UsersTab";
 import { UsageTab } from "@/components/admin/UsageTab";
 import { PaymentsTab } from "@/components/admin/PaymentsTab";
 import { PlansTab } from "@/components/admin/PlansTab";
+import { ResellersTab } from "@/components/admin/ResellersTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
 import { TracesTab } from "@/components/admin/TracesTab";
 import { ProfitTab } from "@/components/admin/ProfitTab";
@@ -92,6 +94,13 @@ const SECTIONS = [
     hint: "Pricing tiers",
     icon: Layers,
     accent: "var(--color-iris-warm)",
+  },
+  {
+    id: "resellers",
+    label: "Resellers",
+    hint: "Coupons & commission",
+    icon: Ticket,
+    accent: "var(--color-mint)",
   },
   {
     id: "settings",
@@ -302,6 +311,7 @@ function AdminPage() {
           {tab === "profit" && <ProfitTab />}
           {tab === "payments" && <PaymentsTab />}
           {tab === "plans" && <PlansTab />}
+          {tab === "resellers" && <ResellersTab />}
           {tab === "settings" && <SettingsTab />}
           {tab === "traces" && <TracesTab />}
           {tab === "audit" && <AuditTab />}
