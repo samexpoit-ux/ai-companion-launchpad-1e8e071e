@@ -242,6 +242,27 @@ function isNoise(message: string) {
   return IGNORED.some((re) => re.test(m));
 }
 
+/**
+ * Stable fingerprint of an error batch: line numbers, hashes and object ids are
+ * stripped so "the same failure again" is recognised across reloads. Used to
+ * (a) tell the fixer a previous patch did not work and (b) give a genuinely new
+ * error a fresh attempt budget instead of dying on "exhausted".
+ */
+function errorSignature(errors: string[]) {
+  return errors
+    .map((e) =>
+      e
+        .toLowerCase()
+        .replace(/\d+/g, "#")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160),
+    )
+    .sort()
+    .join(" | ");
+}
+
+
 let versionSeq = 0;
 const newVersionId = () => `v${Date.now().toString(36)}-${(versionSeq++).toString(36)}`;
 
@@ -288,6 +309,11 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const versionsRef = useRef<PatchVersion[]>([]);
   versionsRef.current = versions;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Fingerprint of the error batch the last patch tried to fix. */
+  const lastSignatureRef = useRef<string>("");
+  /** Short rolling log of what previous attempts tried, sent to the fixer. */
+  const historyRef = useRef<Array<{ attempt: number; summary: string; ok: boolean }>>([]);
+
 
   const resetFixState = useCallback(() => {
     setRuntimeErrors([]);
@@ -296,7 +322,10 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixError(null);
     setFixLog([]);
     setPendingPatch(null);
+    lastSignatureRef.current = "";
+    historyRef.current = [];
   }, []);
+
 
   const resetAutoFix = resetFixState;
 
@@ -479,10 +508,15 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       setRuntimeErrors([]);
       setPendingPatch(null);
       const note = patch.changedPaths.length ? ` (${patch.changedPaths.join(", ")})` : "";
+      historyRef.current = [
+        ...historyRef.current,
+        { attempt: patch.attempt, summary: patch.summary + note, ok: true },
+      ].slice(-5);
       setFixLog((l) => [
         ...l,
         { attempt: patch.attempt, summary: patch.summary + note, model: patch.model, at: Date.now(), ok: true },
       ]);
+
       pushVersion(
         patch.next,
         `AI patch · attempt ${patch.attempt}`,
@@ -524,8 +558,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
   const runAutoFix = useCallback(async () => {
     const current = payloadRef.current;
-    const errors = errorsRef.current;
-    if (!current || errors.length === 0 || busyRef.current) return;
+    if (!current || busyRef.current) return;
 
     busyRef.current = true;
     const attempt = attemptsRef.current + 1;
@@ -534,14 +567,44 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixError(null);
 
     try {
+      // Pre-flight: static build/lint pass gives the model precise, file-scoped
+      // diagnostics (unresolved imports, syntax, missing default export) instead
+      // of only the vague runtime message the sandbox managed to capture.
+      let staticIssues: string[] = [];
+      try {
+        const { validateProject, validateSingle } = await import("@/lib/validate");
+        const result = current.files
+          ? await validateProject(current.files, current.entry)
+          : await validateSingle(current.code, current.lang);
+        staticIssues = result.issues
+          .filter((i) => i.level === "error")
+          .slice(0, 8)
+          .map((i) => `${i.path}${i.line ? `:${i.line}` : ""} — ${i.message}`);
+      } catch {
+        /* validation is best-effort */
+      }
+
+      const errors = [...new Set([...staticIssues, ...errorsRef.current])].slice(0, 10);
+      if (errors.length === 0) {
+        setFixStatus("fixed");
+        return;
+      }
+
+      const signature = errorSignature(errors);
+      const persisted = signature === lastSignatureRef.current;
+      lastSignatureRef.current = signature;
+
       const res = await apiFetch("/api/autofix", {
         code: current.code,
         lang: current.lang,
         errors,
         attempt,
+        persisted,
+        history: historyRef.current.slice(-3),
         files: current.files,
         entry: current.entry,
       });
+
       const data = (await res.json()) as {
         code?: string;
         files?: Record<string, string>;
@@ -599,6 +662,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       const message = err instanceof Error ? err.message : "Auto-fix failed";
       setApiError((prev) => prev ?? parseApiError(err, "autofix"));
       setFixError(message);
+      historyRef.current = [...historyRef.current, { attempt, summary: message, ok: false }].slice(-5);
       setFixLog((l) => [...l, { attempt, summary: message, at: Date.now(), ok: false }]);
       setFixStatus("failed");
     } finally {
@@ -607,12 +671,20 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, [commitPatch]);
 
   // The loop: new errors -> debounce -> patch -> re-run -> repeat until clean or capped.
+  // A genuinely different failure (new fingerprint) gets a fresh attempt budget,
+  // so one exhausted problem never blocks the fixer for the rest of the session.
   useEffect(() => {
     if (!autoFixEnabled || !isOpen) return;
     if (runtimeErrors.length === 0) return;
     if (fixStatus === "fixing" || fixStatus === "review") return;
     if (pendingPatch) return;
     if (fixAttempts >= MAX_FIX_ATTEMPTS) {
+      if (lastSignatureRef.current && errorSignature(runtimeErrors) !== lastSignatureRef.current) {
+        setFixAttempts(0);
+        setFixError(null);
+        setFixStatus("detected");
+        return;
+      }
       setFixStatus("exhausted");
       return;
     }
@@ -624,6 +696,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [runtimeErrors, autoFixEnabled, isOpen, fixStatus, fixAttempts, pendingPatch, runAutoFix]);
+
 
   return (
     <PreviewContext.Provider
