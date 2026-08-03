@@ -241,6 +241,120 @@ function clsx(...args: unknown[]): string {
   return out.join(" ");
 }
 
+/* ---------------------------------------------------- framer-motion / motion
+
+   Generated projects use far more of the motion API than `motion.div`:
+   scroll-linked values, springs, transforms, imperative animate() calls. A
+   missing named export used to surface in the preview as
+   `(0, _framerMotion.useScroll) is not a function`, which auto-fix cannot
+   repair because the fault is in the sandbox, not the generated code. So the
+   shim implements the real surface and falls back to harmless stubs for
+   anything we have not modelled yet. */
+
+type Listener = (v: number) => void;
+
+class MotionValue<T = number> {
+  private current: T;
+  private listeners = new Set<Listener>();
+  constructor(initial: T) {
+    this.current = initial;
+  }
+  get() {
+    return this.current;
+  }
+  set(v: T) {
+    this.current = v;
+    this.listeners.forEach((l) => l(v as unknown as number));
+  }
+  jump(v: T) {
+    this.set(v);
+  }
+  on(_event: string, cb: Listener) {
+    this.listeners.add(cb);
+    return () => this.listeners.delete(cb);
+  }
+  onChange(cb: Listener) {
+    return this.on("change", cb);
+  }
+  destroy() {
+    this.listeners.clear();
+  }
+  getVelocity() {
+    return 0;
+  }
+  isMotionValue = true;
+}
+
+const motionValue = <T,>(initial: T) => new MotionValue<T>(initial);
+const isMotionValue = (v: unknown): v is MotionValue =>
+  typeof v === "object" && v !== null && (v as { isMotionValue?: boolean }).isMotionValue === true;
+
+const useMotionValue = <T,>(initial: T) => React.useRef(new MotionValue<T>(initial)).current;
+
+function useTransform(...args: unknown[]) {
+  // useTransform(value, input[], output[]) | useTransform(() => any)
+  const [source, input, output] = args as [
+    MotionValue | (() => unknown),
+    number[] | undefined,
+    unknown[] | undefined,
+  ];
+  const compute = React.useCallback(() => {
+    if (typeof source === "function") return source();
+    const value = isMotionValue(source) ? (source.get() as number) : 0;
+    if (!input || !output) return value;
+    // linear interpolation across the provided ranges
+    for (let i = 0; i < input.length - 1; i++) {
+      const a = input[i];
+      const b = input[i + 1];
+      if (value >= Math.min(a, b) && value <= Math.max(a, b)) {
+        const t = b === a ? 0 : (value - a) / (b - a);
+        const from = output[i];
+        const to = output[i + 1];
+        if (typeof from === "number" && typeof to === "number") return from + (to - from) * t;
+        return from;
+      }
+    }
+    return value <= input[0] ? output[0] : output[output.length - 1];
+  }, [source, input, output]);
+
+  const out = React.useRef(new MotionValue<unknown>(compute())).current;
+  React.useEffect(() => {
+    if (typeof source === "function" || !isMotionValue(source)) return;
+    out.set(compute());
+    return source.on("change", () => out.set(compute()));
+  }, [source, compute, out]);
+  return out;
+}
+
+const useScroll = () => {
+  const scrollY = useMotionValue(0);
+  const scrollX = useMotionValue(0);
+  const scrollYProgress = useMotionValue(0);
+  const scrollXProgress = useMotionValue(0);
+  React.useEffect(() => {
+    const onScroll = () => {
+      const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+      scrollY.set(window.scrollY);
+      scrollX.set(window.scrollX);
+      scrollYProgress.set(Math.min(1, window.scrollY / max));
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [scrollX, scrollY, scrollYProgress]);
+  return { scrollY, scrollX, scrollYProgress, scrollXProgress };
+};
+
+const noopAnimation = () => {
+  const promise = Promise.resolve() as Promise<void> & { stop: () => void; then: unknown };
+  promise.stop = () => {};
+  return promise;
+};
+
 /** `motion.*` renders the plain element — animation props are dropped. */
 const MOTION_PROPS = new Set([
   "initial",
@@ -248,40 +362,159 @@ const MOTION_PROPS = new Set([
   "exit",
   "transition",
   "variants",
-  "whileHover",
-  "whileTap",
-  "whileInView",
   "viewport",
   "layout",
   "layoutId",
+  "layoutScroll",
+  "layoutDependency",
   "drag",
   "dragConstraints",
+  "dragElastic",
+  "dragMomentum",
+  "dragControls",
+  "dragTransition",
+  "dragListener",
+  "custom",
+  "transformTemplate",
+  "onAnimationStart",
+  "onAnimationComplete",
+  "onUpdate",
+  "onDrag",
+  "onDragStart",
+  "onDragEnd",
+  "onDirectionLock",
+  "onHoverStart",
+  "onHoverEnd",
+  "onTap",
+  "onTapStart",
+  "onTapCancel",
+  "onViewportEnter",
+  "onViewportLeave",
 ]);
 
-const motion: Record<string, React.ComponentType<Record<string, unknown>>> = new Proxy(
-  {},
+const isMotionProp = (key: string) => MOTION_PROPS.has(key) || key.startsWith("while");
+
+/** Resolve MotionValues inside `style` so `style={{ y: scrollY }}` never leaks an object. */
+function cleanStyle(style: unknown): React.CSSProperties | undefined {
+  if (!style || typeof style !== "object") return style as React.CSSProperties | undefined;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(style as Record<string, unknown>)) {
+    out[key] = isMotionValue(value) ? value.get() : value;
+  }
+  return out as React.CSSProperties;
+}
+
+const motionComponent = (tag: string) => {
+  const Component = React.forwardRef<unknown, Record<string, unknown>>((props, ref) => {
+    const clean: Record<string, unknown> = { ref };
+    for (const [key, value] of Object.entries(props)) {
+      if (isMotionProp(key)) continue;
+      clean[key] = key === "style" ? cleanStyle(value) : value;
+    }
+    return React.createElement(tag, clean);
+  });
+  Component.displayName = `motion.${tag}`;
+  return Component as unknown as React.ComponentType<Record<string, unknown>>;
+};
+
+const motionCache = new Map<string, React.ComponentType<Record<string, unknown>>>();
+
+const motion = new Proxy(
+  ((tag: string) => motionComponent(tag)) as unknown as Record<
+    string,
+    React.ComponentType<Record<string, unknown>>
+  >,
   {
-    get: (_target, tag: string) => {
-      const Component = (props: Record<string, unknown>) => {
-        const clean: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(props)) {
-          if (!MOTION_PROPS.has(key)) clean[key] = value;
-        }
-        return React.createElement(tag, clean);
-      };
-      Component.displayName = `motion.${tag}`;
-      return Component;
+    get: (_target, prop: string) => {
+      if (prop === "create" || prop === "custom") return (t: unknown) => motionComponent(typeof t === "string" ? t : "div");
+      let cached = motionCache.get(prop);
+      if (!cached) {
+        cached = motionComponent(prop);
+        motionCache.set(prop, cached);
+      }
+      return cached;
     },
   },
 ) as Record<string, React.ComponentType<Record<string, unknown>>>;
 
-export const framerMotion = {
+const passthrough = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
+
+const framerMotionApi: Record<string, unknown> = {
   motion,
-  AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  useAnimation: () => ({ start: () => Promise.resolve(), stop: () => {} }),
+  m: motion,
+  AnimatePresence: passthrough,
+  MotionConfig: passthrough,
+  LayoutGroup: passthrough,
+  LazyMotion: passthrough,
+  Reorder: { Group: passthrough, Item: passthrough },
+  domAnimation: {},
+  domMax: {},
+  MotionValue,
+  motionValue,
+  isMotionValue,
+  useMotionValue,
+  useTransform,
+  useScroll,
+  useSpring: useMotionValue,
+  useTime: () => useMotionValue(0),
+  useVelocity: () => useMotionValue(0),
+  useMotionTemplate: (strings: TemplateStringsArray, ...values: unknown[]) =>
+    useMotionValue(
+      strings.reduce(
+        (acc, s, i) =>
+          acc + s + (i < values.length ? String(isMotionValue(values[i]) ? values[i].get() : values[i]) : ""),
+        "",
+      ),
+    ),
+  useMotionValueEvent: (value: unknown, _event: string, cb: Listener) => {
+    React.useEffect(() => {
+      if (!isMotionValue(value)) return;
+      return value.on("change", cb);
+    }, [value, cb]);
+  },
+  useAnimation: () => ({ start: noopAnimation, stop: () => {}, set: () => {} }),
+  useAnimationControls: () => ({ start: noopAnimation, stop: () => {}, set: () => {} }),
+  useAnimate: () => [React.useRef(null), noopAnimation] as const,
+  useAnimationFrame: (_cb: unknown) => {},
   useInView: () => true,
   useReducedMotion: () => false,
+  useDragControls: () => ({ start: () => {} }),
+  useCycle: (...states: unknown[]) => {
+    const [index, setIndex] = React.useState(0);
+    return [states[index], () => setIndex((i) => (i + 1) % Math.max(1, states.length))] as const;
+  },
+  animate: noopAnimation,
+  scroll: () => () => {},
+  inView: () => () => {},
+  stagger: () => 0,
+  transform: (v: unknown) => v,
+  spring: () => 0,
+  easeIn: (t: number) => t,
+  easeOut: (t: number) => t,
+  easeInOut: (t: number) => t,
+  cubicBezier: () => (t: number) => t,
 };
+
+/**
+ * Any named export we have not modelled resolves to a harmless stub instead of
+ * `undefined`, so a preview never dies on `X is not a function`.
+ */
+export const framerMotion = new Proxy(framerMotionApi, {
+  get: (target, prop: string) => {
+    if (prop in target) return target[prop];
+    if (prop === "__esModule") return true;
+    if (prop === "default") return target.motion;
+    // Hooks/components must stay callable; return a stub that works as both.
+    const stub = (...args: unknown[]) => {
+      const first = args[0];
+      if (first && typeof first === "object" && "children" in (first as object)) {
+        return (first as { children?: React.ReactNode }).children ?? null;
+      }
+      return undefined;
+    };
+    return stub;
+  },
+}) as Record<string, unknown>;
 
 export const classNameShims = {
   clsx: { default: clsx, clsx, cx: clsx },
@@ -289,3 +522,4 @@ export const classNameShims = {
 };
 
 export { clsx };
+
