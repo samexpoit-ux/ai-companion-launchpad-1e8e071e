@@ -125,8 +125,12 @@ export function planPriceUsd(id: string | null | undefined): number {
   return Number(planById(id).price.replace(/[^0-9.]/g, "")) || 0;
 }
 
+/** Older accounts stored retired slugs; map them onto the current packages. */
+const LEGACY_PLAN_IDS: Record<string, PlanId> = { pro: "growth", business: "scale" };
+
 export function planById(id: string | null | undefined): Plan {
-  return PLANS.find((p) => p.id === id) ?? PLANS[0];
+  const key = typeof id === "string" ? (LEGACY_PLAN_IDS[id] ?? id) : id;
+  return PLANS.find((p) => p.id === key) ?? PLANS[0];
 }
 
 export function isPlanId(value: unknown): value is PlanId {
