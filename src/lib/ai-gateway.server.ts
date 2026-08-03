@@ -208,6 +208,7 @@ export async function callChatCompletion(
   upstreamModel: string,
   messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
   task: TaskKind = "chat",
+  signal?: AbortSignal,
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number }> {
   const res = await fetch(`${config.baseURL}/chat/completions`, {
     method: "POST",
@@ -228,6 +229,7 @@ export async function callChatCompletion(
       // silently drop to a provider that can't serve the full context.
       provider: { sort: "price", allow_fallbacks: true, data_collection: "deny" },
     }),
+    signal,
   });
 
   if (!res.ok) {
@@ -262,13 +264,14 @@ export async function runWithFallback(
   route: ResolvedRoute,
   messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
   onAttempt?: (attempt: { model: string; ok: boolean; ms: number; error?: string }) => void,
+  signal?: AbortSignal,
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number; upstream: string }> {
   const chain = [route.upstream, ...route.fallbacks];
   let lastError: unknown;
   for (const model of chain) {
     const started = Date.now();
     try {
-      const out = await callChatCompletion(route.config, model, messages, route.task);
+      const out = await callChatCompletion(route.config, model, messages, route.task, signal);
       if (out.content.trim()) {
         // Build mode is a delivery contract, not a normal chat answer. If a
         // provider only explains the page, continue to the next coding model.
@@ -298,6 +301,7 @@ export async function runWithFallback(
       lastError = new Error(`[openrouter:${model}] empty response`);
       onAttempt?.({ model, ok: false, ms: Date.now() - started, error: "empty response" });
     } catch (err) {
+      if (signal?.aborted) throw err;
       lastError = err;
       onAttempt?.({
         model,

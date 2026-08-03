@@ -24,20 +24,25 @@ export function acceptsAttachment(file: File) {
   return file.type.startsWith("image/") || file.type.startsWith("text/") || TEXT_EXTENSIONS.has(extension(file.name));
 }
 
-function readAsDataUrl(file: File): Promise<string> {
+function readAsDataUrl(file: File, onProgress?: (progress: number) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
     reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
     reader.readAsDataURL(file);
   });
 }
 
-export async function prepareAttachment(file: File): Promise<ChatAttachment> {
+export async function prepareAttachment(file: File, onProgress?: (progress: number) => void): Promise<ChatAttachment> {
   if (file.size > MAX_ATTACHMENT_BYTES) throw new Error(`${file.name} is larger than 5 MB.`);
   if (!acceptsAttachment(file)) throw new Error(`${file.name} is not a supported image or text/code file.`);
   const kind = file.type.startsWith("image/") ? "image" : "text";
-  const content = kind === "image" ? await readAsDataUrl(file) : (await file.text()).slice(0, MAX_TEXT_CHARS);
+  onProgress?.(5);
+  const content = kind === "image" ? await readAsDataUrl(file, onProgress) : (await file.text()).slice(0, MAX_TEXT_CHARS);
+  onProgress?.(100);
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     name: file.name.slice(0, 180),
