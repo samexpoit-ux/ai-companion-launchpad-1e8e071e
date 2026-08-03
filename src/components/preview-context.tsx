@@ -109,6 +109,54 @@ export interface PatchVersion {
 }
 
 export const MAX_FIX_ATTEMPTS = 3;
+/** Selectable retry ceilings for the auto-fixer. */
+export const FIX_ATTEMPT_CHOICES = [1, 2, 3, 5] as const;
+
+/** Why the fixer decided not to spend a credit on the current errors. */
+export interface FixSkip {
+  reason: string;
+  detail?: string;
+  at: number;
+  /** true when the sandbox healed itself and no code change was needed. */
+  benign: boolean;
+}
+
+/** Credits consumed by the most recent repair, straight from the server. */
+export interface FixCharge {
+  charged: number;
+  remaining: number;
+  unlimited: boolean;
+}
+
+interface AutoFixSettings {
+  autoFixEnabled: boolean;
+  reviewBeforeApply: boolean;
+  maxFixAttempts: number;
+}
+
+const SETTINGS_KEY = "nexura.autofix.settings";
+const DEFAULT_SETTINGS: AutoFixSettings = {
+  autoFixEnabled: true,
+  reviewBeforeApply: false,
+  maxFixAttempts: MAX_FIX_ATTEMPTS,
+};
+
+function loadSettings(): AutoFixSettings {
+  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<AutoFixSettings>;
+    const limit = Number(parsed.maxFixAttempts);
+    return {
+      autoFixEnabled: parsed.autoFixEnabled !== false,
+      reviewBeforeApply: parsed.reviewBeforeApply === true,
+      maxFixAttempts: FIX_ATTEMPT_CHOICES.includes(limit as 1) ? limit : MAX_FIX_ATTEMPTS,
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 interface PreviewContextValue {
   payload: PreviewPayload | null;
@@ -157,6 +205,14 @@ interface PreviewContextValue {
   clearConsole: () => void;
   autoFixEnabled: boolean;
   setAutoFixEnabled: (v: boolean) => void;
+  /** Retry ceiling before the fixer stops spending credits. */
+  maxFixAttempts: number;
+  setMaxFixAttempts: (v: number) => void;
+  /** Why the last repair opportunity was skipped, shown in the UI. */
+  fixSkip: FixSkip | null;
+  clearFixSkip: () => void;
+  /** Credits the last repair actually consumed (server-reported). */
+  fixCharge: FixCharge | null;
   reviewBeforeApply: boolean;
   setReviewBeforeApply: (v: boolean) => void;
   fixStatus: FixStatus;
@@ -311,8 +367,46 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
   const [runtimeErrors, setRuntimeErrors] = useState<string[]>([]);
   const [consoleEntries, setConsoleEntries] = useState<Array<{ id: number; level: "log" | "info" | "warn" | "error"; message: string }>>([]);
-  const [autoFixEnabled, setAutoFixEnabled] = useState(true);
-  const [reviewBeforeApply, setReviewBeforeApply] = useState(false);
+  const [settings, setSettings] = useState<AutoFixSettings>(DEFAULT_SETTINGS);
+  const { autoFixEnabled, reviewBeforeApply, maxFixAttempts } = settings;
+  const [fixSkip, setFixSkip] = useState<FixSkip | null>(null);
+  const [fixCharge, setFixCharge] = useState<FixCharge | null>(null);
+
+  // Read persisted controls after hydration so SSR and the first client render
+  // agree, then keep every later change in localStorage.
+  useEffect(() => {
+    setSettings(loadSettings());
+  }, []);
+  const patchSettings = useCallback((patch: Partial<AutoFixSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+      } catch {
+        /* private mode — in-memory only */
+      }
+      return next;
+    });
+  }, []);
+  const setAutoFixEnabled = useCallback(
+    (v: boolean) => {
+      patchSettings({ autoFixEnabled: v });
+      if (v) setFixSkip(null);
+    },
+    [patchSettings],
+  );
+  const setReviewBeforeApply = useCallback(
+    (v: boolean) => patchSettings({ reviewBeforeApply: v }),
+    [patchSettings],
+  );
+  const setMaxFixAttempts = useCallback(
+    (v: number) => {
+      patchSettings({ maxFixAttempts: v });
+      setFixSkip(null);
+    },
+    [patchSettings],
+  );
+  const clearFixSkip = useCallback(() => setFixSkip(null), []);
   const [fixStatus, setFixStatus] = useState<FixStatus>("idle");
   const [fixAttempts, setFixAttempts] = useState(0);
   const [fixLog, setFixLog] = useState<FixEntry[]>([]);
@@ -332,6 +426,8 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   attemptsRef.current = fixAttempts;
   const reviewRef = useRef(true);
   reviewRef.current = reviewBeforeApply;
+  const limitRef = useRef(MAX_FIX_ATTEMPTS);
+  limitRef.current = maxFixAttempts;
   const busyRef = useRef(false);
   const pendingRef = useRef<PendingPatch | null>(null);
   pendingRef.current = pendingPatch;
@@ -351,6 +447,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixError(null);
     setFixLog([]);
     setPendingPatch(null);
+    setFixSkip(null);
     lastSignatureRef.current = "";
     historyRef.current = [];
   }, []);
