@@ -211,8 +211,9 @@ export function UsageTab() {
                     </td>
                     {!selected && (
                       <td className="max-w-[12rem] truncate px-4 py-2.5 text-xs text-ink-600">
-                        {r.email ?? r.userId.slice(0, 8)}
+                        {r.displayName ?? r.email ?? `Account ${r.userId.slice(0, 8)}`}
                       </td>
+
                     )}
                     <td className="px-4 py-2.5 text-ink-900">
                       {actionLabel(r.action)}
