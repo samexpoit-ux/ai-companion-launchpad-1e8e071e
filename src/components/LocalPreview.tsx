@@ -5,7 +5,7 @@ import * as LucideIcons from "lucide-react";
 import { transform } from "@babel/standalone";
 import { resolveAlias, resolveModule } from "@/lib/artifact";
 import { previewStyleTag } from "@/lib/preview-theme";
-import { injectTailwind } from "@/lib/preview-tailwind";
+import { injectTailwind, loadTailwindRuntime } from "@/lib/preview-tailwind";
 
 import { classNameShims, framerMotion, reactRouterDom } from "@/lib/preview-shims";
 
@@ -30,7 +30,6 @@ const BASE_HTML = `<!doctype html><html><head><meta charset="utf-8" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=Space+Grotesk:wght@400..700&display=swap" rel="stylesheet" />
 <style>html,body{height:100%;margin:0}#root{min-height:100%}</style>
 </head><body><div id="root"></div></body></html>`;
-
 
 const PREVIEW_BRIDGE = `<script>(function(){
   var send=function(type,level,message){ parent.postMessage({source:'nexura-preview',type:type,level:level,message:String(message)}, '*'); };
@@ -149,13 +148,73 @@ function makeRequire() {
   };
 }
 
+/**
+ * Build cache.
+ *
+ * Babel is the slowest part of a preview reload, and most reloads only touch
+ * one file: a patch, a keystroke, a sandbox re-mount. Compiled output is keyed
+ * by path + exact source, so unchanged modules are never transpiled twice and
+ * an incremental reload costs roughly one file instead of the whole project.
+ */
+const buildCache = new Map<string, string>();
+const BUILD_CACHE_MAX = 400;
+
+function cacheKey(path: string, source: string) {
+  // Cheap 32-bit rolling hash keeps the key small for large files.
+  let h = 2166136261;
+  for (let i = 0; i < source.length; i++) {
+    h ^= source.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `${path}::${source.length}::${(h >>> 0).toString(36)}`;
+}
 
 function compileModule(path: string, source: string) {
-  return transform(source, {
-    filename: path,
-    presets: [["react", { runtime: "classic" }], "typescript"],
-    plugins: ["transform-modules-commonjs"],
-  }).code;
+  const key = cacheKey(path, source);
+  const hit = buildCache.get(key);
+  if (hit !== undefined) return hit;
+
+  const out =
+    transform(source, {
+      filename: path,
+      presets: [["react", { runtime: "classic" }], "typescript"],
+      plugins: ["transform-modules-commonjs"],
+    }).code ?? "";
+
+  if (buildCache.size >= BUILD_CACHE_MAX) {
+    // Simple FIFO eviction — the working set is one project at a time.
+    const oldest = buildCache.keys().next().value;
+    if (oldest) buildCache.delete(oldest);
+  }
+  buildCache.set(key, out);
+  return out;
+}
+
+/**
+ * Warm the heavy, shared parts of the preview runtime (Tailwind compiler, web
+ * fonts) before the user ever opens the Preview tab, so the first paint is not
+ * blocked on a cold fetch.
+ */
+let prefetched = false;
+export function prefetchPreviewAssets() {
+  if (prefetched || typeof document === "undefined") return;
+  prefetched = true;
+  void loadTailwindRuntime();
+  for (const [rel, href] of [
+    ["preconnect", "https://fonts.googleapis.com"],
+    ["preconnect", "https://fonts.gstatic.com"],
+    [
+      "prefetch",
+      "https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=Space+Grotesk:wght@400..700&display=swap",
+    ],
+  ] as const) {
+    if (document.head.querySelector(`link[rel="${rel}"][href="${href}"]`)) continue;
+    const link = document.createElement("link");
+    link.rel = rel;
+    link.href = href;
+    if (rel === "preconnect") link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  }
 }
 
 /**
@@ -178,6 +237,7 @@ function runProject(
 
     if (/\.css$/.test(path)) {
       const style = doc.createElement("style");
+      style.dataset["nexuraProjectCss"] = path;
       style.textContent = source;
       doc.head.appendChild(style);
       const empty = {};
@@ -203,7 +263,6 @@ function runProject(
       throw new Error(`Module "${id}" is not available in the live preview (imported by ${path}).`);
     };
 
-    // eslint-disable-next-line no-new-func
     const run = new Function(
       "require",
       "module",
@@ -239,6 +298,7 @@ interface Props {
 export default function LocalPreview({ payload, device, reloadKey }: Props) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const rootRef = useRef<ReactDOMClient.Root | null>(null);
+  const hostRef = useRef<HTMLElement | null>(null);
   const { reportRuntimeError, reportConsole, setBuildError, selectMode, setSelection } =
     usePreview();
   const [compileError, setCompileError] = useState<string | null>(null);
@@ -314,34 +374,45 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
       // Nexura's palette and leave utility classes unstyled.
       void injectTailwind(doc);
 
-
-      // Pipe sandbox errors into the auto-fix loop.
+      // Pipe sandbox errors into the auto-fix loop. Incremental reloads reuse
+      // the same document, so instrument its console exactly once — otherwise
+      // every reload would wrap the wrapper and report each error N times.
+      const flagged = win as unknown as { __nexuraInstrumented?: boolean };
       const frameConsole = (win as unknown as { console: Console }).console;
-      for (const level of ["log", "info", "warn", "error"] as const) {
-        const native = frameConsole[level].bind(frameConsole);
-        frameConsole[level] = (...args: unknown[]) => {
-          const message = args
-            .map((a) => {
-              if (a instanceof Error) return a.message;
-              if (a && typeof a === "object") {
-                try {
-                  return JSON.stringify(a);
-                } catch {
-                  return String(a);
+      if (flagged.__nexuraInstrumented) {
+        /* already piped */
+      } else {
+        flagged.__nexuraInstrumented = true;
+        for (const level of ["log", "info", "warn", "error"] as const) {
+          const native = frameConsole[level].bind(frameConsole);
+          frameConsole[level] = (...args: unknown[]) => {
+            const message = args
+              .map((a) => {
+                if (a instanceof Error) return a.message;
+                if (a && typeof a === "object") {
+                  try {
+                    return JSON.stringify(a);
+                  } catch {
+                    return String(a);
+                  }
                 }
-              }
-              return String(a);
-            })
-            .join(" ");
-          reportConsole(level, message);
-          if (level === "error") reportRuntimeError(message);
-          native(...args);
-        };
+                return String(a);
+              })
+              .join(" ");
+            reportConsole(level, message);
+            if (level === "error") reportRuntimeError(message);
+            native(...args);
+          };
+        }
+        win.addEventListener("error", (e) => reportRuntimeError(String((e as ErrorEvent).message)));
+        win.addEventListener("unhandledrejection", (e) =>
+          reportRuntimeError(String((e as PromiseRejectionEvent).reason)),
+        );
       }
-      win.addEventListener("error", (e) => reportRuntimeError(String((e as ErrorEvent).message)));
-      win.addEventListener("unhandledrejection", (e) =>
-        reportRuntimeError(String((e as PromiseRejectionEvent).reason)),
-      );
+
+      // Drop stylesheets injected by the previous build so repeated reloads do
+      // not stack duplicate (and stale) project CSS.
+      doc.querySelectorAll("style[data-nexura-project-css]").forEach((el) => el.remove());
 
       const host = doc.getElementById("root");
       if (!host) return;
@@ -360,7 +431,7 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
           const source = ensureDefaultExport(payload.code);
           const out = compileModule(payload.lang === "react-ts" ? "App.tsx" : "App.jsx", source);
           const module: { exports: Record<string, unknown> } = { exports: {} };
-          // eslint-disable-next-line no-new-func
+
           const run = new Function(
             "require",
             "module",
@@ -377,8 +448,13 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
 
         if (!Component) throw new Error("No React component was exported from this project.");
 
-        rootRef.current?.unmount();
-        rootRef.current = ReactDOMClient.createRoot(host);
+        // Reuse the existing root when the frame document survived: React then
+        // reconciles in place instead of tearing the tree down and repainting.
+        if (!rootRef.current || hostRef.current !== host) {
+          if (hostRef.current && hostRef.current !== host) rootRef.current?.unmount();
+          rootRef.current = ReactDOMClient.createRoot(host);
+          hostRef.current = host;
+        }
         rootRef.current.render(
           React.createElement(
             PreviewErrorBoundary,
@@ -399,9 +475,6 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
     return () => {
       cancelled = true;
       frame.removeEventListener("load", mount);
-      const root = rootRef.current;
-      rootRef.current = null;
-      if (root) setTimeout(() => root.unmount(), 0);
     };
   }, [
     payload.code,
@@ -414,6 +487,22 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
     reportRuntimeError,
     setBuildError,
   ]);
+
+  // Tear the root down only when the preview component unmounts.
+  useEffect(
+    () => () => {
+      const root = rootRef.current;
+      rootRef.current = null;
+      hostRef.current = null;
+      if (root) setTimeout(() => root.unmount(), 0);
+    },
+    [],
+  );
+
+  // Warm Tailwind + fonts as soon as the engine loads.
+  useEffect(() => {
+    prefetchPreviewAssets();
+  }, []);
 
   // Static HTML previews are Tailwind-authored too, so give them the compiler.
   useEffect(() => {
@@ -428,8 +517,6 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
     frame.addEventListener("load", run);
     return () => frame.removeEventListener("load", run);
   }, [isReact, payload.code, payload.lang, reloadKey]);
-
-
 
   /**
    * Visual "select element to edit": while the picker is armed we outline the
@@ -489,7 +576,11 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
 
   const frame = (
     <iframe
-      key={`${payload.lang}-${reloadKey}`}
+      // React previews render into a stable document (BASE_HTML), so the frame
+      // is intentionally NOT keyed on reloadKey: a rebuild re-renders in place
+      // instead of recreating the document, which keeps Tailwind, fonts and
+      // scroll position warm. Non-React docs still need a fresh document.
+      key={isReact ? `react-${payload.lang}` : `${payload.lang}-${reloadKey}`}
       ref={frameRef}
       title="Live preview"
       srcDoc={srcDoc}

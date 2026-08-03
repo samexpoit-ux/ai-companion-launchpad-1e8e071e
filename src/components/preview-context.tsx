@@ -11,15 +11,7 @@ import {
 } from "react";
 import type { ArtifactProject } from "@/lib/artifact";
 
-
-export type PreviewLang =
-  | "react"
-  | "react-ts"
-  | "html"
-  | "vanilla"
-  | "vanilla-ts"
-  | "css"
-  | "mdx";
+export type PreviewLang = "react" | "react-ts" | "html" | "vanilla" | "vanilla-ts" | "css" | "mdx";
 export type PreviewTab = "preview" | "code" | "console" | "stack";
 
 /** One line in the right-hand Details timeline. */
@@ -60,7 +52,6 @@ export interface PreviewPayload {
   title?: string;
 }
 
-
 /** One element picked with the visual "select to edit" tool. */
 export interface PreviewSelection {
   /** Human label, e.g. `h1.text-4xl`. */
@@ -74,7 +65,14 @@ export interface PreviewSelection {
   className: string;
 }
 
-export type FixStatus = "idle" | "detected" | "fixing" | "review" | "fixed" | "failed" | "exhausted";
+export type FixStatus =
+  | "idle"
+  | "detected"
+  | "fixing"
+  | "review"
+  | "fixed"
+  | "failed"
+  | "exhausted";
 
 export interface FixEntry {
   attempt: number;
@@ -109,6 +107,54 @@ export interface PatchVersion {
 }
 
 export const MAX_FIX_ATTEMPTS = 3;
+/** Selectable retry ceilings for the auto-fixer. */
+export const FIX_ATTEMPT_CHOICES = [1, 2, 3, 5] as const;
+
+/** Why the fixer decided not to spend a credit on the current errors. */
+export interface FixSkip {
+  reason: string;
+  detail?: string;
+  at: number;
+  /** true when the sandbox healed itself and no code change was needed. */
+  benign: boolean;
+}
+
+/** Credits consumed by the most recent repair, straight from the server. */
+export interface FixCharge {
+  charged: number;
+  remaining: number;
+  unlimited: boolean;
+}
+
+interface AutoFixSettings {
+  autoFixEnabled: boolean;
+  reviewBeforeApply: boolean;
+  maxFixAttempts: number;
+}
+
+const SETTINGS_KEY = "nexura.autofix.settings";
+const DEFAULT_SETTINGS: AutoFixSettings = {
+  autoFixEnabled: true,
+  reviewBeforeApply: false,
+  maxFixAttempts: MAX_FIX_ATTEMPTS,
+};
+
+function loadSettings(): AutoFixSettings {
+  if (typeof window === "undefined") return DEFAULT_SETTINGS;
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<AutoFixSettings>;
+    const limit = Number(parsed.maxFixAttempts);
+    return {
+      autoFixEnabled: parsed.autoFixEnabled !== false,
+      reviewBeforeApply: parsed.reviewBeforeApply === true,
+      maxFixAttempts: FIX_ATTEMPT_CHOICES.includes(limit as 1) ? limit : MAX_FIX_ATTEMPTS,
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 interface PreviewContextValue {
   payload: PreviewPayload | null;
@@ -145,7 +191,6 @@ interface PreviewContextValue {
   setBuildError: (m: string | null) => void;
   closePreview: () => void;
 
-
   /** bumped whenever the sandbox source is replaced, used to remount Sandpack */
   revision: number;
   // ---- auto bug-fix loop ----
@@ -157,6 +202,20 @@ interface PreviewContextValue {
   clearConsole: () => void;
   autoFixEnabled: boolean;
   setAutoFixEnabled: (v: boolean) => void;
+  /** Retry ceiling before the fixer stops spending credits. */
+  maxFixAttempts: number;
+  setMaxFixAttempts: (v: number) => void;
+  /** Why the last repair opportunity was skipped, shown in the UI. */
+  fixSkip: FixSkip | null;
+  clearFixSkip: () => void;
+  /** Credits the last repair actually consumed (server-reported). */
+  fixCharge: FixCharge | null;
+  /**
+   * Recent user requests from the conversation. The fixer sends them along so a
+   * patch respects what the user actually asked for instead of only reacting to
+   * the stack trace.
+   */
+  setFixIntent: (notes: string[]) => void;
   reviewBeforeApply: boolean;
   setReviewBeforeApply: (v: boolean) => void;
   fixStatus: FixStatus;
@@ -183,12 +242,21 @@ interface PreviewContextValue {
   backToLatest: () => void;
 }
 
-
 const PreviewContext = createContext<PreviewContextValue | null>(null);
 
 const PREVIEWABLE = new Set([
-  "jsx", "tsx", "js", "javascript", "ts", "typescript",
-  "html", "htm", "css", "mdx", "md", "markdown",
+  "jsx",
+  "tsx",
+  "js",
+  "javascript",
+  "ts",
+  "typescript",
+  "html",
+  "htm",
+  "css",
+  "mdx",
+  "md",
+  "markdown",
 ]);
 
 export function isPreviewable(lang: string) {
@@ -236,7 +304,6 @@ const IGNORED = [
   /source ?map/i,
 ];
 
-
 /**
  * Faults that come from the preview sandbox itself (an unmodelled shim export,
  * a package we do not bundle) rather than from the generated code. Sending
@@ -269,27 +336,14 @@ function isNoise(message: string) {
  */
 function errorSignature(errors: string[]) {
   return errors
-    .map((e) =>
-      e
-        .toLowerCase()
-        .replace(/\d+/g, "#")
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 160),
-    )
+    .map((e) => e.toLowerCase().replace(/\d+/g, "#").replace(/\s+/g, " ").trim().slice(0, 160))
     .sort()
     .join(" | ");
 }
 
 function normalizedError(message: string) {
-  return message
-    .toLowerCase()
-    .replace(/\d+/g, "#")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 240);
+  return message.toLowerCase().replace(/\d+/g, "#").replace(/\s+/g, " ").trim().slice(0, 240);
 }
-
 
 let versionSeq = 0;
 const newVersionId = () => `v${Date.now().toString(36)}-${(versionSeq++).toString(36)}`;
@@ -307,12 +361,57 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const [selection, setSelection] = useState<PreviewSelection | null>(null);
   const [buildError, setBuildError] = useState<string | null>(null);
 
-
-
   const [runtimeErrors, setRuntimeErrors] = useState<string[]>([]);
-  const [consoleEntries, setConsoleEntries] = useState<Array<{ id: number; level: "log" | "info" | "warn" | "error"; message: string }>>([]);
-  const [autoFixEnabled, setAutoFixEnabled] = useState(true);
-  const [reviewBeforeApply, setReviewBeforeApply] = useState(false);
+  const [consoleEntries, setConsoleEntries] = useState<
+    Array<{ id: number; level: "log" | "info" | "warn" | "error"; message: string }>
+  >([]);
+  const [settings, setSettings] = useState<AutoFixSettings>(DEFAULT_SETTINGS);
+  const { autoFixEnabled, reviewBeforeApply, maxFixAttempts } = settings;
+  const [fixSkip, setFixSkip] = useState<FixSkip | null>(null);
+  const [fixCharge, setFixCharge] = useState<FixCharge | null>(null);
+
+  // Read persisted controls after hydration so SSR and the first client render
+  // agree, then keep every later change in localStorage.
+  useEffect(() => {
+    setSettings(loadSettings());
+  }, []);
+  const patchSettings = useCallback((patch: Partial<AutoFixSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+      } catch {
+        /* private mode — in-memory only */
+      }
+      return next;
+    });
+  }, []);
+  const setAutoFixEnabled = useCallback(
+    (v: boolean) => {
+      patchSettings({ autoFixEnabled: v });
+      if (v) setFixSkip(null);
+    },
+    [patchSettings],
+  );
+  const setReviewBeforeApply = useCallback(
+    (v: boolean) => patchSettings({ reviewBeforeApply: v }),
+    [patchSettings],
+  );
+  const setMaxFixAttempts = useCallback(
+    (v: number) => {
+      patchSettings({ maxFixAttempts: v });
+      setFixSkip(null);
+    },
+    [patchSettings],
+  );
+  const clearFixSkip = useCallback(() => setFixSkip(null), []);
+  const intentRef = useRef<string[]>([]);
+  const setFixIntent = useCallback((notes: string[]) => {
+    intentRef.current = notes
+      .map((n) => n.trim().slice(0, 400))
+      .filter(Boolean)
+      .slice(-3);
+  }, []);
   const [fixStatus, setFixStatus] = useState<FixStatus>("idle");
   const [fixAttempts, setFixAttempts] = useState(0);
   const [fixLog, setFixLog] = useState<FixEntry[]>([]);
@@ -332,6 +431,8 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   attemptsRef.current = fixAttempts;
   const reviewRef = useRef(true);
   reviewRef.current = reviewBeforeApply;
+  const limitRef = useRef(MAX_FIX_ATTEMPTS);
+  limitRef.current = maxFixAttempts;
   const busyRef = useRef(false);
   const pendingRef = useRef<PendingPatch | null>(null);
   pendingRef.current = pendingPatch;
@@ -343,7 +444,6 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   /** Short rolling log of what previous attempts tried, sent to the fixer. */
   const historyRef = useRef<Array<{ attempt: number; summary: string; ok: boolean }>>([]);
 
-
   const resetFixState = useCallback(() => {
     setRuntimeErrors([]);
     setFixStatus("idle");
@@ -351,18 +451,16 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixError(null);
     setFixLog([]);
     setPendingPatch(null);
+    setFixSkip(null);
     lastSignatureRef.current = "";
     historyRef.current = [];
   }, []);
-
 
   const resetAutoFix = resetFixState;
 
   const seedHistory = useCallback((next: PreviewPayload, label: string) => {
     const id = newVersionId();
-    setVersions([
-      { id, at: Date.now(), label, changedPaths: [], payload: next, current: true },
-    ]);
+    setVersions([{ id, at: Date.now(), label, changedPaths: [], payload: next, current: true }]);
     setActiveVersionId(id);
   }, []);
 
@@ -438,8 +536,6 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setRevision((r) => r + 1);
   }, []);
 
-
-
   /**
    * Visual edit: rewrite the picked element's text in the source file so the
    * change survives a rebuild, an export and a GitHub push — not just the DOM.
@@ -452,7 +548,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
       if (prev.files) {
         const hit =
-          (selection?.file && prev.files[selection.file]?.includes(current) ? selection.file : null) ??
+          (selection?.file && prev.files[selection.file]?.includes(current)
+            ? selection.file
+            : null) ??
           Object.keys(prev.files).find((path) => prev.files?.[path]?.includes(current));
         if (!hit) return false;
         const source = prev.files[hit] ?? "";
@@ -507,16 +605,15 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setRevision((r) => r + 1);
   }, [resetFixState]);
 
-
-
-
   const clearRuntimeErrors = useCallback(() => {
     setRuntimeErrors([]);
     setFixStatus("idle");
   }, []);
 
   const reportRuntimeError = useCallback((message: string) => {
-    const clean = String(message ?? "").trim().slice(0, 1200);
+    const clean = String(message ?? "")
+      .trim()
+      .slice(0, 1200);
     if (!clean || isNoise(clean)) return;
     const signature = normalizedError(clean);
     setRuntimeErrors((prev) =>
@@ -528,9 +625,13 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const reportConsole = useCallback((level: "log" | "info" | "warn" | "error", message: string) => {
-    const clean = String(message ?? "").trim().slice(0, 4000);
+    const clean = String(message ?? "")
+      .trim()
+      .slice(0, 4000);
     if (!clean) return;
-    setConsoleEntries((prev) => [...prev, { id: Date.now() + prev.length, level, message: clean }].slice(-200));
+    setConsoleEntries((prev) =>
+      [...prev, { id: Date.now() + prev.length, level, message: clean }].slice(-200),
+    );
   }, []);
   const clearConsole = useCallback(() => setConsoleEntries([]), []);
 
@@ -548,7 +649,13 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       ].slice(-5);
       setFixLog((l) => [
         ...l,
-        { attempt: patch.attempt, summary: patch.summary + note, model: patch.model, at: Date.now(), ok: true },
+        {
+          attempt: patch.attempt,
+          summary: patch.summary + note,
+          model: patch.model,
+          at: Date.now(),
+          ok: true,
+        },
       ]);
 
       pushVersion(
@@ -572,7 +679,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixStatus("detected");
     setFixLog((l) => [
       ...l,
-      { attempt: attemptsRef.current, summary: "Patch discarded after review", at: Date.now(), ok: false },
+      {
+        attempt: attemptsRef.current,
+        summary: "Patch discarded after review",
+        at: Date.now(),
+        ok: false,
+      },
     ]);
   }, []);
 
@@ -589,7 +701,6 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setVersions((prev) => prev.map((v) => ({ ...v, current: v.id === id })));
   }, []);
 
-
   // How many times each sandbox-level fault has already been self-healed.
   const sandboxHealRef = useRef<Map<string, number>>(new Map());
 
@@ -602,6 +713,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixAttempts(attempt);
     setFixStatus("fixing");
     setFixError(null);
+    setFixSkip(null);
     const controller = new AbortController();
     fixAbortRef.current = controller;
 
@@ -625,6 +737,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
       const errors = [...new Set([...staticIssues, ...errorsRef.current])].slice(0, 10);
       if (errors.length === 0) {
+        setFixSkip({
+          reason: "Nothing to repair",
+          detail: "The preview compiled cleanly, so no credits were spent.",
+          at: Date.now(),
+          benign: true,
+        });
         setFixStatus("fixed");
         return;
       }
@@ -644,6 +762,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
             ok: true,
           },
         ]);
+        setFixSkip({
+          reason: "Skipped — preview environment issue, not your code",
+          detail: `${errors[0].slice(0, 200)} · the sandbox was reloaded instead, so no credits were spent.`,
+          at: Date.now(),
+          benign: true,
+        });
         // Reload at most once per distinct fault so a shim gap can never turn
         // into an endless reload loop.
         if (healed === 0) setRevision((r) => r + 1);
@@ -656,16 +780,21 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       const persisted = signature === lastSignatureRef.current;
       lastSignatureRef.current = signature;
 
-      const res = await apiFetch("/api/autofix", {
-        code: current.code,
-        lang: current.lang,
-        errors,
-        attempt,
-        persisted,
-        history: historyRef.current.slice(-3),
-        files: current.files,
-        entry: current.entry,
-      }, controller.signal);
+      const res = await apiFetch(
+        "/api/autofix",
+        {
+          code: current.code,
+          lang: current.lang,
+          errors,
+          attempt,
+          persisted,
+          history: historyRef.current.slice(-3),
+          intent: intentRef.current,
+          files: current.files,
+          entry: current.entry,
+        },
+        controller.signal,
+      );
 
       const data = (await res.json()) as {
         code?: string;
@@ -674,8 +803,16 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         summary?: string;
         changed?: boolean;
         model?: string;
+        credits?: { charged?: number; remaining?: number; unlimited?: boolean };
         error?: unknown;
       };
+      if (data.credits) {
+        setFixCharge({
+          charged: Number(data.credits.charged ?? 0),
+          remaining: Number(data.credits.remaining ?? 0),
+          unlimited: data.credits.unlimited === true,
+        });
+      }
       if (!res.ok || (!data.code && !data.files)) {
         const parsed = res.ok
           ? buildApiError("bad_model_output", "autofix", "The model did not return a usable patch.")
@@ -692,10 +829,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         const merged = { ...current.files, ...data.files };
         const entry = current.entry ?? Object.keys(merged)[0];
         next = { ...current, files: merged, code: merged[entry] ?? current.code };
-        changedPaths =
-          data.changedPaths?.length
-            ? data.changedPaths
-            : Object.keys(data.files).filter((p) => current.files?.[p] !== data.files?.[p]);
+        changedPaths = data.changedPaths?.length
+          ? data.changedPaths
+          : Object.keys(data.files).filter((p) => current.files?.[p] !== data.files?.[p]);
       } else if (current.files && data.code) {
         const entry = current.entry ?? Object.keys(current.files)[0];
         next = { ...current, files: { ...current.files, [entry]: data.code }, code: data.code };
@@ -752,7 +888,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       const message = err instanceof Error ? err.message : "Auto-fix failed";
       setApiError((prev) => prev ?? parseApiError(err, "autofix"));
       setFixError(message);
-      historyRef.current = [...historyRef.current, { attempt, summary: message, ok: false }].slice(-5);
+      historyRef.current = [...historyRef.current, { attempt, summary: message, ok: false }].slice(
+        -5,
+      );
       setFixLog((l) => [...l, { attempt, summary: message, at: Date.now(), ok: false }]);
       setFixStatus("failed");
     } finally {
@@ -765,17 +903,35 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   // A genuinely different failure (new fingerprint) gets a fresh attempt budget,
   // so one exhausted problem never blocks the fixer for the rest of the session.
   useEffect(() => {
-    if (!autoFixEnabled || !isOpen) return;
-    if (runtimeErrors.length === 0) return;
+    if (!isOpen || runtimeErrors.length === 0) return;
+    if (!autoFixEnabled) {
+      // Explicit, visible reason — the user turned automatic repair off, so we
+      // never silently spend a credit on their behalf.
+      setFixSkip({
+        reason: "Auto-fix is off",
+        detail: `${runtimeErrors.length} issue${runtimeErrors.length > 1 ? "s" : ""} detected. Run "Fix with AI" to repair (this spends credits).`,
+        at: Date.now(),
+        benign: true,
+      });
+      setFixStatus((s) => (s === "fixing" || s === "review" ? s : "detected"));
+      return;
+    }
     if (fixStatus === "fixing" || fixStatus === "review") return;
     if (pendingPatch) return;
-    if (fixAttempts >= MAX_FIX_ATTEMPTS) {
+    if (fixAttempts >= limitRef.current) {
       if (lastSignatureRef.current && errorSignature(runtimeErrors) !== lastSignatureRef.current) {
         setFixAttempts(0);
         setFixError(null);
         setFixStatus("detected");
         return;
       }
+      setFixSkip({
+        reason: `Retry limit reached (${limitRef.current})`,
+        detail:
+          "Automatic repair stopped so it cannot keep burning credits. Raise the limit or fix manually.",
+        at: Date.now(),
+        benign: false,
+      });
       setFixStatus("exhausted");
       return;
     }
@@ -786,8 +942,16 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [runtimeErrors, autoFixEnabled, isOpen, fixStatus, fixAttempts, pendingPatch, runAutoFix]);
-
+  }, [
+    runtimeErrors,
+    autoFixEnabled,
+    maxFixAttempts,
+    isOpen,
+    fixStatus,
+    fixAttempts,
+    pendingPatch,
+    runAutoFix,
+  ]);
 
   return (
     <PreviewContext.Provider
@@ -820,7 +984,6 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         setBuildError,
         closePreview,
 
-
         revision,
         runtimeErrors,
         reportRuntimeError,
@@ -830,6 +993,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         clearConsole,
         autoFixEnabled,
         setAutoFixEnabled,
+        maxFixAttempts,
+        setMaxFixAttempts,
+        fixSkip,
+        clearFixSkip,
+        fixCharge,
+        setFixIntent,
         reviewBeforeApply,
         setReviewBeforeApply,
         fixStatus,
@@ -862,4 +1031,3 @@ export function usePreview() {
   if (!ctx) throw new Error("usePreview must be used within PreviewProvider");
   return ctx;
 }
-

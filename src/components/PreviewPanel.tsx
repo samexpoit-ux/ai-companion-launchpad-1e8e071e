@@ -23,6 +23,9 @@ import {
   Check,
   Layers,
   Square,
+  Info,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -38,7 +41,9 @@ import { CreditMeter } from "@/components/CreditMeter";
 import { formatCredits } from "@/lib/credits";
 import {
   usePreview,
-  MAX_FIX_ATTEMPTS,
+  FIX_ATTEMPT_CHOICES,
+  type FixCharge,
+  type FixSkip,
   type PreviewPayload,
   type PreviewDevice,
 } from "./preview-context";
@@ -60,7 +65,6 @@ const StackPreview = lazy(() => import("./StackPreview"));
 // Lovable-style "Details" trajectory view (timeline + changed files).
 const TimelinePanel = lazy(() => import("./TimelinePanel"));
 
-
 export function PreviewPanel() {
   const {
     isOpen,
@@ -74,6 +78,11 @@ export function PreviewPanel() {
     runtimeErrors,
     autoFixEnabled,
     setAutoFixEnabled,
+    maxFixAttempts,
+    setMaxFixAttempts,
+    fixSkip,
+    clearFixSkip,
+    fixCharge,
     fixStatus,
     fixAttempts,
     fixLog,
@@ -107,8 +116,6 @@ export function PreviewPanel() {
     [payload?.files],
   );
 
-
-
   // Safe run flow: nothing executes in the sandbox until the user explicitly
   // arms this revision. A new AI patch (new revision) re-locks the preview.
   const [armedRevision, setArmedRevision] = useState<number | null>(null);
@@ -125,15 +132,30 @@ export function PreviewPanel() {
     setReloadKey((k) => k + 1);
   }, [revision]);
 
+  // Prefetch the preview engine chunk + Tailwind/fonts as soon as the
+  // workspace opens, so switching to the Preview tab paints immediately.
+  useEffect(() => {
+    if (!isOpen) return;
+    void import("./LocalPreview").then((mod) => mod.prefetchPreviewAssets());
+  }, [isOpen]);
+
+  // A repair is billable, so the meter follows the server's authoritative
+  // balance from the /api/autofix response instead of a client-side guess.
+  useEffect(() => {
+    if (!fixCharge) return;
+    credits.applyServerBalance(fixCharge);
+  }, [fixCharge, credits]);
+
   const chargedAutoFix = useCallback(async () => {
     if (!credits.canAfford("autofix")) {
       setRunError("Not enough credits for an auto-fix attempt.");
       return;
     }
+    clearFixSkip();
     // The /api/autofix route charges the account server-side; refresh after.
     runAutoFix();
     void credits.refresh();
-  }, [credits, runAutoFix]);
+  }, [credits, runAutoFix, clearFixSkip]);
 
   if (!isOpen) return null;
   // The details timeline replaces the workspace until "Back to latest".
@@ -180,7 +202,6 @@ export function PreviewPanel() {
             />
           )}
         </div>
-
 
         <span className="pointer-events-none hidden min-w-0 shrink truncate rounded-full border border-ink-200 bg-ink-100 px-2 py-1 font-mono text-2xs text-ink-500 lg:inline">
           {payload.files ? `${Object.keys(payload.files).length} files` : payload.lang}
@@ -260,8 +281,6 @@ export function PreviewPanel() {
             }
           />
 
-
-
           {/* Secondary controls collapse into one menu so the bar never wraps */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -338,6 +357,31 @@ export function PreviewPanel() {
                   {autoFixEnabled ? "On" : "Off"}
                 </span>
               </DropdownMenuItem>
+              <div className="flex items-center gap-1 px-2 py-1.5">
+                <span className="mr-auto text-xs text-ink-600">Max retries</span>
+                {FIX_ATTEMPT_CHOICES.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setMaxFixAttempts(n)}
+                    aria-pressed={maxFixAttempts === n}
+                    title={`Stop automatic repair after ${n} attempt${n > 1 ? "s" : ""}`}
+                    className={cn(
+                      "h-6 w-6 rounded-md border text-2xs font-semibold transition",
+                      maxFixAttempts === n
+                        ? "border-[color:var(--color-iris)]/45 bg-[color:var(--color-iris)]/12 text-[color:var(--color-iris)]"
+                        : "border-ink-200 text-ink-500 hover:bg-ink-900/5",
+                    )}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div className="px-2 pb-1.5 text-2xs leading-snug text-ink-500">
+                Each AI repair spends credits ({formatCredits(credits.quote("autofix"))} per
+                attempt). Sandbox-only faults are healed for free.
+              </div>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setHistoryOpen((h) => !h)}>
                 <History className="mr-2 h-3.5 w-3.5" />
                 Patch history
@@ -365,6 +409,11 @@ export function PreviewPanel() {
       <AutoFixBar
         status={fixStatus}
         attempts={fixAttempts}
+        limit={maxFixAttempts}
+        enabled={autoFixEnabled}
+        skip={fixSkip}
+        charge={fixCharge}
+        onToggleEnabled={() => setAutoFixEnabled(!autoFixEnabled)}
         errors={runtimeErrors}
         log={fixLog}
         error={fixError}
@@ -407,7 +456,6 @@ export function PreviewPanel() {
                 device={device}
               />
             )}
-
           </Suspense>
 
           {selection && tab === "preview" ? (
@@ -421,10 +469,10 @@ export function PreviewPanel() {
           {buildError &&
             !pendingPatch &&
             (!autoFixEnabled || fixStatus === "failed" || fixStatus === "exhausted") && (
-            <Suspense fallback={null}>
-              <ErrorOverlay onReload={() => setReloadKey((k) => k + 1)} />
-            </Suspense>
-          )}
+              <Suspense fallback={null}>
+                <ErrorOverlay onReload={() => setReloadKey((k) => k + 1)} />
+              </Suspense>
+            )}
 
           {pendingPatch && (
             <Suspense fallback={null}>
@@ -485,6 +533,11 @@ function PreviewConsole({
 function AutoFixBar({
   status,
   attempts,
+  limit,
+  enabled,
+  skip,
+  charge,
+  onToggleEnabled,
   errors,
   log,
   error,
@@ -494,6 +547,11 @@ function AutoFixBar({
 }: {
   status: string;
   attempts: number;
+  limit: number;
+  enabled: boolean;
+  skip: FixSkip | null;
+  charge: FixCharge | null;
+  onToggleEnabled: () => void;
   errors: string[];
   log: Array<{ attempt: number; summary: string; model?: string; ok: boolean }>;
   error: string | null;
@@ -501,7 +559,7 @@ function AutoFixBar({
   onCancel: () => void;
   onReset: () => void;
 }) {
-  if (status === "idle" && errors.length === 0) return null;
+  if (status === "idle" && errors.length === 0 && !skip) return null;
 
   const last = log[log.length - 1];
 
@@ -528,14 +586,37 @@ function AutoFixBar({
 
       <div className="min-w-0 flex-1">
         <div className="font-medium">
-          {status === "fixing" && `Auto-fixing… attempt ${attempts} of ${MAX_FIX_ATTEMPTS}`}
+          {status === "fixing" && `Auto-fixing… attempt ${attempts} of ${limit}`}
           {status === "review" && `Patch ready for review — attempt ${attempts}`}
           {status === "detected" &&
-            `Preview check found ${errors.length} issue${errors.length > 1 ? "s" : ""} · repairing in the background`}
+            (enabled
+              ? `Preview check found ${errors.length} issue${errors.length > 1 ? "s" : ""} · repairing in the background`
+              : `Preview check found ${errors.length} issue${errors.length > 1 ? "s" : ""} · automatic repair is off`)}
           {status === "fixed" && (last?.summary ?? "Patch applied")}
           {status === "failed" && (error ?? "Auto-fix failed")}
-          {status === "exhausted" && `Still failing after ${MAX_FIX_ATTEMPTS} AI attempts`}
+          {status === "exhausted" &&
+            `Stopped after ${limit} AI attempt${limit > 1 ? "s" : ""} — retry limit reached`}
         </div>
+        {/* Always say WHY a repair did not run, so a skipped fix never looks broken. */}
+        {skip && (
+          <div
+            className={cn(
+              "mt-1 flex flex-wrap items-center gap-x-1.5 text-2xs",
+              skip.benign ? "opacity-80" : "font-medium opacity-90",
+            )}
+          >
+            <Info className="h-3 w-3 shrink-0" />
+            <span>{skip.reason}</span>
+            {skip.detail && <span className="opacity-75">— {skip.detail}</span>}
+          </div>
+        )}
+        {charge ? (
+          <div className="mt-0.5 font-mono text-2xs opacity-70">
+            {charge.unlimited
+              ? "repair credits: unlimited"
+              : `repair cost ${formatCredits(charge.charged)} · ${formatCredits(charge.remaining)} credits left`}
+          </div>
+        ) : null}
         {errors.length > 0 && (status === "failed" || status === "exhausted") && (
           <pre className="mt-1 max-h-16 overflow-auto whitespace-pre-wrap break-words font-mono text-2xs opacity-80">
             {errors.slice(-2).join("\n")}
@@ -549,6 +630,21 @@ function AutoFixBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={onToggleEnabled}
+          aria-pressed={enabled}
+          title={enabled ? "Disable automatic repair" : "Enable automatic repair"}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-2xs transition",
+            enabled
+              ? "border-current/25 bg-white/70 hover:bg-white/90"
+              : "border-current/20 bg-white/40 opacity-80 hover:opacity-100",
+          )}
+        >
+          {enabled ? <ToggleRight className="h-3 w-3" /> : <ToggleLeft className="h-3 w-3" />}
+          Auto {enabled ? "on" : "off"}
+        </button>
         {status === "fixing" && (
           <button
             onClick={onCancel}
@@ -748,7 +844,9 @@ function SelectionEditor({
         className="mt-2 w-full resize-none rounded-xl border border-ink-200 bg-white px-2.5 py-2 text-xs text-ink-900 outline-none focus:border-[color:var(--color-iris)]"
       />
 
-      {error ? <p className="mt-1 text-2xs text-[color:var(--nx-danger,#DC2626)]">{error}</p> : null}
+      {error ? (
+        <p className="mt-1 text-2xs text-[color:var(--nx-danger,#DC2626)]">{error}</p>
+      ) : null}
 
       <div className="mt-2 flex items-center justify-end gap-2">
         <button

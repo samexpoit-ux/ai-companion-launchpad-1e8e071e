@@ -144,6 +144,7 @@ function ChatWorkspaceInner() {
     openWorkspace,
     openProject,
     clearProject,
+    setFixIntent,
   } = usePreview();
   const isMobile = useIsMobile();
 
@@ -206,29 +207,39 @@ function ChatWorkspaceInner() {
 
   useEffect(() => () => requestAbortRef.current?.abort(), []);
 
-  const addFiles = useCallback(async (files: FileList | null) => {
-    if (!files?.length) return;
-    setAttachmentError(null);
-    try {
-      const available = Math.max(0, MAX_ATTACHMENTS - attachments.length);
-      if (available === 0) throw new Error(`You can attach up to ${MAX_ATTACHMENTS} files.`);
-      const selected = Array.from(files).slice(0, available);
-      selected.forEach((file) => setUploadProgress((current) => ({ ...current, [file.name]: 0 })));
-      const next = await Promise.all(selected.map((file) => prepareAttachment(file, (progress) => {
-        setUploadProgress((current) => ({ ...current, [file.name]: progress }));
-      })));
-      setAttachments((current) => [...current, ...next].slice(0, MAX_ATTACHMENTS));
-      setUploadProgress((current) => {
-        const copy = { ...current };
-        selected.forEach((file) => delete copy[file.name]);
-        return copy;
-      });
-      if (files.length > available) setAttachmentError(`Only the first ${available} files were added.`);
-    } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : "Could not attach that file.");
-      setUploadProgress({});
-    }
-  }, [attachments.length]);
+  const addFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files?.length) return;
+      setAttachmentError(null);
+      try {
+        const available = Math.max(0, MAX_ATTACHMENTS - attachments.length);
+        if (available === 0) throw new Error(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+        const selected = Array.from(files).slice(0, available);
+        selected.forEach((file) =>
+          setUploadProgress((current) => ({ ...current, [file.name]: 0 })),
+        );
+        const next = await Promise.all(
+          selected.map((file) =>
+            prepareAttachment(file, (progress) => {
+              setUploadProgress((current) => ({ ...current, [file.name]: progress }));
+            }),
+          ),
+        );
+        setAttachments((current) => [...current, ...next].slice(0, MAX_ATTACHMENTS));
+        setUploadProgress((current) => {
+          const copy = { ...current };
+          selected.forEach((file) => delete copy[file.name]);
+          return copy;
+        });
+        if (files.length > available)
+          setAttachmentError(`Only the first ${available} files were added.`);
+      } catch (error) {
+        setAttachmentError(error instanceof Error ? error.message : "Could not attach that file.");
+        setUploadProgress({});
+      }
+    },
+    [attachments.length],
+  );
 
   // Load conversations from the database (single source of truth).
   useEffect(() => {
@@ -624,16 +635,38 @@ function ChatWorkspaceInner() {
         // Lovable behaviour: a generated project loads straight into the
         // right-hand live workspace, no extra click.
         const generated = parseArtifacts(reply.content)[0];
-        if (generated) openProject(generated);
+        if (generated) {
+          openProject(generated);
+          // Give the repair loop the conversation's intent so a fix keeps the
+          // feature the user asked for instead of just silencing the error.
+          setFixIntent(
+            [...(thread.messages ?? []), userMsg]
+              .filter((m) => m.role === "user")
+              .slice(-3)
+              .map((m) => m.content),
+          );
+        }
         if (reply.credits) credits.applyServerBalance(reply.credits);
         else void credits.refresh();
       } catch (error) {
         if (controller.signal.aborted) {
           const stopped: ChatMessage = {
-            id: uid(), role: "assistant", content: "_Stopped by you._", createdAt: Date.now(),
+            id: uid(),
+            role: "assistant",
+            content: "_Stopped by you._",
+            createdAt: Date.now(),
           };
-          updateThread(thread.id, (t) => ({ ...t, messages: [...t.messages, stopped], updatedAt: Date.now() }));
-          void saveMessage({ threadId: thread.id, clientId: stopped.id, role: "assistant", content: stopped.content });
+          updateThread(thread.id, (t) => ({
+            ...t,
+            messages: [...t.messages, stopped],
+            updatedAt: Date.now(),
+          }));
+          void saveMessage({
+            threadId: thread.id,
+            clientId: stopped.id,
+            role: "assistant",
+            content: stopped.content,
+          });
           return;
         }
         const apiErr = parseApiError(error, "chat");
@@ -659,7 +692,7 @@ function ChatWorkspaceInner() {
         setIsSending(false);
       }
     },
-    [modelId, updateThread, mode, credits, isMobile, openWorkspace, openProject],
+    [modelId, updateThread, mode, credits, isMobile, openWorkspace, openProject, setFixIntent],
   );
 
   const handleSend = async () => {
@@ -675,7 +708,8 @@ function ChatWorkspaceInner() {
   const cancelGeneration = useCallback(() => requestAbortRef.current?.abort(), []);
 
   const applyVoiceDraft = useCallback(() => {
-    const text = `${voiceDraft}${voiceDraft && voice.partialTranscript ? " " : ""}${voice.partialTranscript}`.trim();
+    const text =
+      `${voiceDraft}${voiceDraft && voice.partialTranscript ? " " : ""}${voice.partialTranscript}`.trim();
     if (text) setInput((current) => `${current}${current.trim() ? " " : ""}${text}`);
     setVoiceDraft("");
     voice.clearPartialTranscript();
@@ -794,7 +828,7 @@ function ChatWorkspaceInner() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link to="/projects" search={{}}>
+                <Link to="/projects" search={{ filter: "all" }}>
                   <FolderTree className="mr-2 h-3.5 w-3.5" />
                   All projects
                 </Link>
@@ -1157,10 +1191,17 @@ function ChatWorkspaceInner() {
               <div className="nx-rise mx-auto w-full max-w-3xl px-3 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-3">
                 <div
                   data-testid="composer"
-                  onDragEnter={(event) => { event.preventDefault(); setDraggingFiles(true); }}
-                  onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setDraggingFiles(true);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "copy";
+                  }}
                   onDragLeave={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingFiles(false);
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                      setDraggingFiles(false);
                   }}
                   onDrop={(event) => {
                     event.preventDefault();
@@ -1181,7 +1222,9 @@ function ChatWorkspaceInner() {
                       <div className="text-center text-sm font-medium text-ink-800">
                         <UploadCloud className="mx-auto mb-1.5 h-6 w-6 text-[color:var(--color-iris)]" />
                         Drop up to {MAX_ATTACHMENTS} images or text/code files
-                        <span className="mt-1 block text-xs font-normal text-ink-500">PNG, JPG, WebP, GIF, TXT, MD, CSV, JSON and source files · 5 MB each</span>
+                        <span className="mt-1 block text-xs font-normal text-ink-500">
+                          PNG, JPG, WebP, GIF, TXT, MD, CSV, JSON and source files · 5 MB each
+                        </span>
                       </div>
                     </div>
                   )}
@@ -1214,11 +1257,19 @@ function ChatWorkspaceInner() {
                           key={item.id}
                           className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-ink-200 bg-ink-100 px-2 py-1 text-xs text-ink-700"
                         >
-                          {item.kind === "image" ? <ImageIcon className="h-3.5 w-3.5" /> : <Paperclip className="h-3.5 w-3.5" />}
+                          {item.kind === "image" ? (
+                            <ImageIcon className="h-3.5 w-3.5" />
+                          ) : (
+                            <Paperclip className="h-3.5 w-3.5" />
+                          )}
                           <span className="max-w-40 truncate">{item.name}</span>
                           <button
                             type="button"
-                            onClick={() => setAttachments((current) => current.filter((file) => file.id !== item.id))}
+                            onClick={() =>
+                              setAttachments((current) =>
+                                current.filter((file) => file.id !== item.id),
+                              )
+                            }
                             className="rounded-sm text-ink-400 hover:text-ink-900"
                             aria-label={`Remove ${item.name}`}
                           >
@@ -1232,8 +1283,16 @@ function ChatWorkspaceInner() {
                     <div className="space-y-1.5 px-4 pt-3 sm:px-5" aria-live="polite">
                       {Object.entries(uploadProgress).map(([name, progress]) => (
                         <div key={name} className="text-xs text-ink-600">
-                          <div className="mb-1 flex justify-between gap-3"><span className="truncate">{name}</span><span>{progress}%</span></div>
-                          <div className="h-1 overflow-hidden rounded-full bg-ink-100"><div className="h-full bg-[color:var(--color-iris)] transition-[width]" style={{ width: `${progress}%` }} /></div>
+                          <div className="mb-1 flex justify-between gap-3">
+                            <span className="truncate">{name}</span>
+                            <span>{progress}%</span>
+                          </div>
+                          <div className="h-1 overflow-hidden rounded-full bg-ink-100">
+                            <div
+                              className="h-full bg-[color:var(--color-iris)] transition-[width]"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1241,7 +1300,9 @@ function ChatWorkspaceInner() {
                   {(voice.listening || voice.partialTranscript || voiceDraft) && (
                     <div className="mx-4 mt-3 rounded-lg border border-ink-200 bg-ink-50 p-2.5 sm:mx-5">
                       <div className="mb-1.5 flex items-center justify-between text-xs text-ink-500">
-                        <span>{voice.listening ? "Listening… edit before inserting" : "Voice draft"}</span>
+                        <span>
+                          {voice.listening ? "Listening… edit before inserting" : "Voice draft"}
+                        </span>
                         <span className="font-mono">Alt+M · Esc</span>
                       </div>
                       <textarea
@@ -1255,8 +1316,28 @@ function ChatWorkspaceInner() {
                         className="w-full resize-none bg-transparent text-sm text-ink-900 outline-none"
                       />
                       <div className="mt-1.5 flex justify-end gap-2">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => { voice.stop(); voice.clearPartialTranscript(); setVoiceDraft(""); }}>Discard</Button>
-                        <Button type="button" size="sm" onClick={() => { voice.stop(); applyVoiceDraft(); }}>Insert transcript</Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            voice.stop();
+                            voice.clearPartialTranscript();
+                            setVoiceDraft("");
+                          }}
+                        >
+                          Discard
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            voice.stop();
+                            applyVoiceDraft();
+                          }}
+                        >
+                          Insert transcript
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -1346,7 +1427,11 @@ function ChatWorkspaceInner() {
                         type="button"
                         aria-label={voice.listening ? "Stop voice input" : "Voice input"}
                         aria-pressed={voice.listening}
-                        title={voice.supported ? "Voice input" : "Voice input is unavailable in this browser"}
+                        title={
+                          voice.supported
+                            ? "Voice input"
+                            : "Voice input is unavailable in this browser"
+                        }
                         onClick={voice.toggle}
                         className={cn(
                           "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-150 hover:bg-ink-100 hover:text-ink-900 active:scale-95",
@@ -1355,7 +1440,11 @@ function ChatWorkspaceInner() {
                             : "text-ink-500",
                         )}
                       >
-                        {voice.listening ? <span className="h-2.5 w-2.5 rounded-sm bg-current" /> : <Mic className="h-4 w-4" />}
+                        {voice.listening ? (
+                          <span className="h-2.5 w-2.5 rounded-sm bg-current" />
+                        ) : (
+                          <Mic className="h-4 w-4" />
+                        )}
                       </button>
 
                       <SendButton
@@ -1368,7 +1457,10 @@ function ChatWorkspaceInner() {
                 </div>
 
                 {(attachmentError || voice.error) && (
-                  <div className="mt-2 flex items-center justify-center gap-2 text-xs text-destructive" role="status">
+                  <div
+                    className="mt-2 flex items-center justify-center gap-2 text-xs text-destructive"
+                    role="status"
+                  >
                     <span>{attachmentError ?? voice.error}</span>
                     <button
                       type="button"
@@ -1788,7 +1880,10 @@ function TypingIndicator({ model, adminView = false }: { model: AIModel; adminVi
   ];
 
   useEffect(() => {
-    const timer = window.setInterval(() => setPhase((current) => Math.min(current + 1, phases.length - 1)), 2400);
+    const timer = window.setInterval(
+      () => setPhase((current) => Math.min(current + 1, phases.length - 1)),
+      2400,
+    );
     return () => window.clearInterval(timer);
   }, [phases.length]);
 
