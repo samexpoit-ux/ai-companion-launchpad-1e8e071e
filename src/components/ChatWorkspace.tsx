@@ -794,7 +794,7 @@ function ChatWorkspaceInner() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
-                <Link to="/projects" search={{}}>
+                <Link to="/projects" search={{ filter: "all" }}>
                   <FolderTree className="mr-2 h-3.5 w-3.5" />
                   All projects
                 </Link>
