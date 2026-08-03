@@ -4,6 +4,10 @@ import {
   ArrowRight,
   Boxes,
   Braces,
+  Brain,
+  Bug,
+  FileSearch,
+  MessageSquare,
   Check,
   Container,
   Database,
@@ -25,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandMark, BrandWordmark } from "@/components/BrandMark";
 import nexuraLogo from "@/assets/nexura-mark.png";
+import { EngineLogo } from "@/components/EngineLogos";
+import { PLANS } from "@/lib/plans";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -50,15 +56,50 @@ export const Route = createFileRoute("/")({
 
 /** Marketing-only engine badges — the product itself never exposes model picks. */
 const ENGINES = [
-  { name: "Claude", tag: "Anthropic", mono: "C", accent: "#D97757" },
-  { name: "GPT", tag: "OpenAI", mono: "G", accent: "#10A37F" },
-  { name: "Gemini", tag: "Google", mono: "◆", accent: "#4285F4" },
-  { name: "DeepSeek", tag: "DeepSeek", mono: "D", accent: "#4D6BFE" },
-  { name: "Qwen", tag: "Alibaba", mono: "Q", accent: "#7C3AED" },
-  { name: "Nemotron", tag: "NVIDIA", mono: "N", accent: "#76B900" },
-  { name: "Gemma", tag: "Google", mono: "▲", accent: "#1A73E8" },
-  { name: "Kat Coder", tag: "Kwai", mono: "K", accent: "#F43F5E" },
+  { name: "Claude", tag: "Anthropic", id: "claude", accent: "#D97757" },
+  { name: "GPT", tag: "OpenAI", id: "openai", accent: "#10A37F" },
+  { name: "Gemini", tag: "Google", id: "gemini", accent: "#4285F4" },
+  { name: "DeepSeek", tag: "DeepSeek", id: "deepseek", accent: "#4D6BFE" },
+  { name: "Qwen", tag: "Alibaba", id: "qwen", accent: "#7C3AED" },
+  { name: "Nemotron", tag: "NVIDIA", id: "nvidia", accent: "#76B900" },
+  { name: "Gemma", tag: "Google", id: "gemma", accent: "#1A73E8" },
+  { name: "Kat Coder", tag: "Kwai", id: "kat", accent: "#F43F5E" },
 ] as const;
+
+/** AI capabilities highlighted on the landing page. */
+const AI_FEATURES = [
+  {
+    icon: Brain,
+    title: "Thinking before building",
+    body: "Every prompt is planned first — scope, files and data model — then written, so you get a coherent project instead of a pile of snippets.",
+  },
+  {
+    icon: MessageSquare,
+    title: "Chat, plan & build modes",
+    body: "Ask questions, draft an architecture, or ship code. The workspace switches intent without losing your thread.",
+  },
+  {
+    icon: ImageIcon,
+    title: "AI image generation",
+    body: "Generate hero art, icons and illustrations right inside a build and drop them straight into your project.",
+  },
+  {
+    icon: Mic,
+    title: "Voice to prompt",
+    body: "Dictate a feature request, edit the transcript, then send it — hotkeys included.",
+  },
+  {
+    icon: FileSearch,
+    title: "Attachment understanding",
+    body: "Drop screenshots, specs or source files and the builder reads them as part of the request.",
+  },
+  {
+    icon: Bug,
+    title: "Self-healing builds",
+    body: "Runtime errors are detected, explained in plain language and patched automatically — always shown as a reviewable diff.",
+  },
+] as const;
+
 
 const STACKS = [
   { icon: Braces, label: "JavaScript & TypeScript" },
@@ -153,6 +194,12 @@ function LandingPage() {
             >
               Engines
             </a>
+            <a
+              href="#pricing"
+              className="hidden rounded-xl px-3 py-2 text-sm text-ink-600 transition hover:bg-ink-100 hover:text-ink-900 sm:block"
+            >
+              Pricing
+            </a>
             <Button asChild size="sm">
               <Link to="/auth">Start free</Link>
             </Button>
@@ -231,34 +278,38 @@ function LandingPage() {
               className="nx-orbit-reverse absolute inset-12 rounded-full border border-[color:var(--color-orchid)]/25"
             />
 
-            {/* orbiting engine chips */}
+            {/* orbiting engine logos — counter-rotated so each mark stays upright */}
             <span aria-hidden className="nx-orbit absolute inset-0">
               {ENGINES.slice(0, 6).map((engine, i) => {
                 const angle = (i / 6) * Math.PI * 2;
                 return (
                   <span
                     key={engine.name}
-                    className="absolute grid h-8 w-8 place-items-center rounded-xl bg-white text-2xs font-bold shadow-ds-sm ring-1 ring-ink-200"
+                    className="nx-orbit-reverse absolute grid h-9 w-9 place-items-center rounded-2xl bg-white shadow-ds-sm ring-1 ring-ink-200"
                     style={{
-                      left: `calc(50% + ${Math.cos(angle) * 46}% - 1rem)`,
-                      top: `calc(50% + ${Math.sin(angle) * 46}% - 1rem)`,
+                      left: `calc(50% + ${Math.cos(angle) * 46}% - 1.125rem)`,
+                      top: `calc(50% + ${Math.sin(angle) * 46}% - 1.125rem)`,
                       color: engine.accent,
                     }}
                   >
-                    {engine.mono}
+                    <EngineLogo id={engine.id} className="h-4.5 w-4.5" />
                   </span>
                 );
               })}
             </span>
 
-            <div className="nx-logo-3d relative grid place-items-center">
+
+            <div className="nx-logo-stage relative grid place-items-center">
+              <span aria-hidden className="nx-logo-halo absolute h-40 w-40 rounded-full" />
+              <div className="nx-logo-3d relative grid place-items-center">
               <img
                 src={nexuraLogo}
                 alt="Nexura AI logo"
                 width={168}
                 height={168}
-                className="h-32 w-32 object-contain sm:h-40 sm:w-40"
-              />
+                  className="h-32 w-32 object-contain sm:h-40 sm:w-40"
+                />
+              </div>
             </div>
 
             <div className="absolute -bottom-2 rounded-2xl border border-ink-200 bg-white/90 px-3 py-1.5 text-2xs font-semibold uppercase tracking-wider text-ink-600 shadow-ds-sm backdrop-blur">
@@ -286,11 +337,11 @@ function LandingPage() {
                   }`}
                 >
                   <span
-                    className="grid h-8 w-8 place-items-center rounded-xl text-sm font-bold text-white"
+                    className="grid h-9 w-9 place-items-center rounded-xl text-white"
                     style={{ background: engine.accent }}
                     aria-hidden
                   >
-                    {engine.mono}
+                    <EngineLogo id={engine.id} className="h-5 w-5" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold tracking-tight text-ink-900">
@@ -363,33 +414,49 @@ function LandingPage() {
 
             {/* preview */}
             <div className="p-5">
-              <div className="rounded-2xl border border-ink-200 bg-ink-100/50 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-sm font-semibold tracking-tight text-ink-900">
-                    Revenue dashboard
-                  </span>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-2xs text-ink-500 ring-1 ring-ink-200">
-                    Live
-                  </span>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {["MRR", "Users", "Churn"].map((k) => (
-                    <div key={k} className="rounded-xl bg-white p-2.5 shadow-ds-xs">
-                      <p className="text-2xs uppercase tracking-wider text-ink-500">{k}</p>
-                      <p className="mt-1 font-display text-base font-semibold text-ink-900">—</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex h-24 items-end gap-1.5 rounded-xl bg-white p-3 shadow-ds-xs">
-                  {[35, 52, 44, 68, 59, 82, 74, 96].map((h, i) => (
+              <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-ds-xs">
+                <div className="flex items-center justify-between border-b border-ink-200 px-3.5 py-2.5">
+                  <span className="flex items-center gap-1.5">
                     <span
-                      key={i}
-                      className="flex-1 rounded-t-md"
-                      style={{ height: `${h}%`, background: "var(--iris-gradient)" }}
+                      className="h-4 w-4 rounded-md"
+                      style={{ background: "var(--iris-gradient)" }}
+                      aria-hidden
                     />
-                  ))}
+                    <span className="text-2xs font-semibold tracking-tight text-ink-900">
+                      Your generated app
+                    </span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-mint-soft)] px-2 py-0.5 text-2xs font-semibold text-[color:var(--color-mint)]">
+                    <Check className="h-3 w-3" aria-hidden /> 0 errors
+                  </span>
+                </div>
+                <div className="p-3.5">
+                  <div
+                    className="rounded-xl px-3.5 py-5 text-[color:var(--color-iris-fg)]"
+                    style={{ background: "var(--admin-gradient)" }}
+                  >
+                    <p className="font-display text-sm font-semibold tracking-tight">
+                      Auth, billing & database — wired
+                    </p>
+                    <p className="mt-1 text-2xs text-white/70">
+                      Routes, schema and policies generated for you.
+                    </p>
+                    <span className="mt-3 inline-flex rounded-lg bg-white/15 px-2.5 py-1 text-2xs font-semibold ring-1 ring-inset ring-white/20">
+                      Get started
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {[Database, ShieldCheck, Layers].map((Icon, i) => (
+                      <div key={i} className="rounded-xl bg-ink-100/70 p-2.5">
+                        <Icon className="h-3.5 w-3.5 text-[color:var(--color-iris)]" aria-hidden />
+                        <span className="mt-2 block h-1.5 w-3/4 rounded-full bg-ink-200" />
+                        <span className="mt-1.5 block h-1.5 w-1/2 rounded-full bg-ink-200/70" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
+
               <div className="mt-3 flex flex-wrap gap-2">
                 {STACKS.slice(0, 4).map((s) => (
                   <span
@@ -444,6 +511,137 @@ function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* -------------------------------------------------------- ai features */}
+      <section className="relative isolate overflow-hidden border-y border-ink-200/70 bg-white/60 py-16 backdrop-blur lg:py-20">
+        <div aria-hidden className="absolute inset-0 aurora-canvas opacity-60" />
+        <div className="relative mx-auto w-full max-w-6xl px-5">
+          <div className="max-w-2xl">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-ink-200 bg-white/80 px-3 py-1 text-2xs font-semibold uppercase tracking-[0.18em] text-ink-500">
+              <Sparkles className="h-3 w-3 text-[color:var(--color-iris)]" aria-hidden />
+              AI capabilities
+            </span>
+            <h2 className="mt-4 font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+              The AI does the engineering, not just the typing
+            </h2>
+            <p className="mt-2 text-base leading-relaxed text-ink-500">
+              Planning, code, images, voice, file understanding and repair — one intelligence layer
+              across the whole workspace.
+            </p>
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {AI_FEATURES.map((f) => (
+              <article
+                key={f.title}
+                className="rounded-3xl border border-ink-200 bg-white/85 p-5 shadow-ds-xs transition duration-200 hover:-translate-y-1 hover:shadow-ds-lg"
+              >
+                <span
+                  className="grid h-10 w-10 place-items-center rounded-2xl text-[color:var(--color-iris-fg)]"
+                  style={{ background: "var(--iris-gradient)" }}
+                >
+                  <f.icon className="h-4.5 w-4.5" aria-hidden />
+                </span>
+                <h3 className="mt-3.5 font-display text-base font-semibold tracking-tight text-ink-900">
+                  {f.title}
+                </h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-500">{f.body}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ----------------------------------------------------------- pricing */}
+      <section id="pricing" className="mx-auto w-full max-w-6xl px-5 py-16 lg:py-20">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="font-display text-2xl font-semibold tracking-tight text-ink-900 sm:text-3xl">
+            Premium routing. Honest pricing.
+          </h2>
+          <p className="mt-2 text-base leading-relaxed text-ink-500">
+            Start free on our open engine pool, then pay only for the credits you build with.
+          </p>
+        </div>
+
+        <div className="mt-9 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {PLANS.map((plan) => {
+            const featured = plan.badge === "Popular";
+            return (
+              <article
+                key={plan.id}
+                className={`relative flex flex-col overflow-hidden rounded-3xl border p-5 transition duration-200 hover:-translate-y-1 ${
+                  featured
+                    ? "border-transparent text-[color:var(--color-iris-fg)] shadow-ds-lg"
+                    : "border-ink-200 bg-white shadow-ds-xs hover:shadow-ds-lg"
+                }`}
+                style={featured ? { background: "var(--admin-gradient)" } : undefined}
+              >
+                {plan.badge ? (
+                  <span className="absolute right-4 top-4 rounded-full bg-white/15 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wider ring-1 ring-inset ring-white/25">
+                    {plan.badge}
+                  </span>
+                ) : null}
+                <p
+                  className={`text-2xs font-semibold uppercase tracking-[0.18em] ${
+                    featured ? "text-white/70" : "text-ink-500"
+                  }`}
+                >
+                  {plan.name}
+                </p>
+                <p className="mt-2 flex items-baseline gap-1">
+                  <span
+                    className={`font-display text-3xl font-semibold tracking-tight ${
+                      featured ? "" : "nx-gradient-text"
+                    }`}
+                  >
+                    {plan.price}
+                  </span>
+                  <span className={`text-2xs ${featured ? "text-white/70" : "text-ink-500"}`}>
+                    / {plan.cadence}
+                  </span>
+                </p>
+                <p
+                  className={`mt-1 text-sm font-medium ${featured ? "text-white/85" : "text-ink-700"}`}
+                >
+                  {plan.credits} credits
+                </p>
+                <p className={`mt-2 text-2xs leading-relaxed ${featured ? "text-white/70" : "text-ink-500"}`}>
+                  {plan.tagline}
+                </p>
+                <ul className="mt-4 space-y-1.5 text-2xs">
+                  {plan.perks.map((perk) => (
+                    <li
+                      key={perk}
+                      className={`flex items-start gap-1.5 ${featured ? "text-white/80" : "text-ink-600"}`}
+                    >
+                      <Check
+                        className={`mt-0.5 h-3 w-3 shrink-0 ${
+                          featured ? "" : "text-[color:var(--color-mint)]"
+                        }`}
+                        aria-hidden
+                      />
+                      {perk}
+                    </li>
+                  ))}
+                </ul>
+                <Button
+                  asChild
+                  size="sm"
+                  variant={featured ? "secondary" : plan.id === "free" ? "outline" : "default"}
+                  className="mt-5 w-full"
+                >
+                  <Link to="/auth">{plan.id === "free" ? "Start free" : "Choose plan"}</Link>
+                </Button>
+              </article>
+            );
+          })}
+        </div>
+        <p className="mt-4 text-center text-2xs text-ink-400">
+          Top-ups from 100 credits. Credits never expire mid-period, and every build shows exactly
+          what it cost.
+        </p>
+      </section>
+
 
       {/* ------------------------------------------------------------ stacks */}
       <section className="mx-auto w-full max-w-6xl px-5 pb-16 lg:pb-20">

@@ -689,10 +689,27 @@
   100% { opacity: 0.25; transform: translateY(30%); }
 }
 
+@utility nx-logo-stage {
+  perspective: 900px;
+  transform-style: preserve-3d;
+}
+
 @utility nx-logo-3d {
   transform-style: preserve-3d;
   animation: nx-float 9s ease-in-out infinite;
   filter: drop-shadow(0 26px 42px rgba(37, 74, 140, 0.35));
+  will-change: transform;
+}
+
+@keyframes nx-halo {
+  0%, 100% { opacity: 0.35; transform: scale(0.92); }
+  50%      { opacity: 0.75; transform: scale(1.06); }
+}
+
+@utility nx-logo-halo {
+  background: var(--iris-gradient-soft, var(--iris-gradient));
+  filter: blur(30px);
+  animation: nx-halo 6s ease-in-out infinite;
 }
 
 @utility nx-orbit {
@@ -719,5 +736,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nx-logo-3d, .nx-orbit, .nx-orbit-reverse, .nx-marquee, .nx-beam { animation: none; }
+  .nx-logo-3d, .nx-logo-halo, .nx-orbit, .nx-orbit-reverse, .nx-marquee, .nx-beam { animation: none; }
 }
