@@ -178,7 +178,7 @@ export const Route = createFileRoute("/api/autofix")({
         const traceId = newTraceId();
         const attempts: TraceAttempt[] = [];
         try {
-          const result = await runWithFallback(route, messages, (a) => attempts.push(a));
+          const result = await runWithFallback(route, messages, (a) => attempts.push(a), request.signal);
           const finalCharge = await finalizeRequestCost(request, charge.id, "autofix", {
             costUsd: result.costUsd,
             inputTokens: result.inputTokens,
@@ -283,6 +283,7 @@ export const Route = createFileRoute("/api/autofix")({
             },
           });
         } catch (err) {
+          if (request.signal.aborted) return new Response(null, { status: 499 });
           await finalizeRequestCost(request, charge.id, "autofix", { failed: true });
           const e = err as Error & { status?: number };
           await recordTrace(request, {

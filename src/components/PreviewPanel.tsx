@@ -78,6 +78,7 @@ export function PreviewPanel() {
     fixLog,
     fixError,
     runAutoFix,
+    cancelAutoFix,
     resetAutoFix,
     reviewBeforeApply,
     setReviewBeforeApply,
@@ -367,6 +368,7 @@ export function PreviewPanel() {
         log={fixLog}
         error={fixError}
         onFix={() => void chargedAutoFix()}
+        onCancel={cancelAutoFix}
         onReset={resetAutoFix}
       />
 
@@ -486,6 +488,7 @@ function AutoFixBar({
   log,
   error,
   onFix,
+  onCancel,
   onReset,
 }: {
   status: string;
@@ -494,6 +497,7 @@ function AutoFixBar({
   log: Array<{ attempt: number; summary: string; model?: string; ok: boolean }>;
   error: string | null;
   onFix: () => void;
+  onCancel: () => void;
   onReset: () => void;
 }) {
   if (status === "idle" && errors.length === 0) return null;
@@ -544,6 +548,16 @@ function AutoFixBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        {status === "fixing" && (
+          <button
+            onClick={onCancel}
+            className="inline-flex items-center gap-1 rounded-md border border-current/25 bg-white/70 px-2 py-1 text-2xs hover:bg-white/90"
+            aria-label="Cancel auto-fix"
+          >
+            <Square className="h-3 w-3 fill-current" />
+            Cancel
+          </button>
+        )}
         {(status === "detected" || status === "failed" || status === "exhausted") &&
           errors.length > 0 && (
             <button

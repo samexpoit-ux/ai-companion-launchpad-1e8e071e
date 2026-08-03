@@ -100,8 +100,10 @@ const EXTERNALS: Record<string, unknown> = {
 
 function makeRequire() {
   return (id: string) => {
-    if (id in EXTERNALS) return EXTERNALS[id];
-    if (/\.(css|scss|sass|less)$/.test(id)) return {};
+    const normalized = id.trim().replace(/\/$/, "");
+    if (normalized in EXTERNALS) return EXTERNALS[normalized];
+    if (normalized.startsWith("react-router-dom/")) return reactRouterDom;
+    if (/\.(css|scss|sass|less)$/.test(normalized)) return {};
     throw new Error(
       `Module "${id}" is not available in the live preview. Available: react, react-dom, lucide-react, react-router-dom, framer-motion, clsx, tailwind-merge.`,
     );
