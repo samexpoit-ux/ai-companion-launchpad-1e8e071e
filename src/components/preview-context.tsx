@@ -699,6 +699,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixAttempts(attempt);
     setFixStatus("fixing");
     setFixError(null);
+    setFixSkip(null);
     const controller = new AbortController();
     fixAbortRef.current = controller;
 
@@ -722,6 +723,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
       const errors = [...new Set([...staticIssues, ...errorsRef.current])].slice(0, 10);
       if (errors.length === 0) {
+        setFixSkip({
+          reason: "Nothing to repair",
+          detail: "The preview compiled cleanly, so no credits were spent.",
+          at: Date.now(),
+          benign: true,
+        });
         setFixStatus("fixed");
         return;
       }
@@ -741,6 +748,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
             ok: true,
           },
         ]);
+        setFixSkip({
+          reason: "Skipped — preview environment issue, not your code",
+          detail: `${errors[0].slice(0, 200)} · the sandbox was reloaded instead, so no credits were spent.`,
+          at: Date.now(),
+          benign: true,
+        });
         // Reload at most once per distinct fault so a shim gap can never turn
         // into an endless reload loop.
         if (healed === 0) setRevision((r) => r + 1);
@@ -771,8 +784,16 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         summary?: string;
         changed?: boolean;
         model?: string;
+        credits?: { charged?: number; remaining?: number; unlimited?: boolean };
         error?: unknown;
       };
+      if (data.credits) {
+        setFixCharge({
+          charged: Number(data.credits.charged ?? 0),
+          remaining: Number(data.credits.remaining ?? 0),
+          unlimited: data.credits.unlimited === true,
+        });
+      }
       if (!res.ok || (!data.code && !data.files)) {
         const parsed = res.ok
           ? buildApiError("bad_model_output", "autofix", "The model did not return a usable patch.")
@@ -862,17 +883,34 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   // A genuinely different failure (new fingerprint) gets a fresh attempt budget,
   // so one exhausted problem never blocks the fixer for the rest of the session.
   useEffect(() => {
-    if (!autoFixEnabled || !isOpen) return;
-    if (runtimeErrors.length === 0) return;
+    if (!isOpen || runtimeErrors.length === 0) return;
+    if (!autoFixEnabled) {
+      // Explicit, visible reason — the user turned automatic repair off, so we
+      // never silently spend a credit on their behalf.
+      setFixSkip({
+        reason: "Auto-fix is off",
+        detail: `${runtimeErrors.length} issue${runtimeErrors.length > 1 ? "s" : ""} detected. Run "Fix with AI" to repair (this spends credits).`,
+        at: Date.now(),
+        benign: true,
+      });
+      setFixStatus((s) => (s === "fixing" || s === "review" ? s : "detected"));
+      return;
+    }
     if (fixStatus === "fixing" || fixStatus === "review") return;
     if (pendingPatch) return;
-    if (fixAttempts >= MAX_FIX_ATTEMPTS) {
+    if (fixAttempts >= limitRef.current) {
       if (lastSignatureRef.current && errorSignature(runtimeErrors) !== lastSignatureRef.current) {
         setFixAttempts(0);
         setFixError(null);
         setFixStatus("detected");
         return;
       }
+      setFixSkip({
+        reason: `Retry limit reached (${limitRef.current})`,
+        detail: "Automatic repair stopped so it cannot keep burning credits. Raise the limit or fix manually.",
+        at: Date.now(),
+        benign: false,
+      });
       setFixStatus("exhausted");
       return;
     }
@@ -883,7 +921,16 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [runtimeErrors, autoFixEnabled, isOpen, fixStatus, fixAttempts, pendingPatch, runAutoFix]);
+  }, [
+    runtimeErrors,
+    autoFixEnabled,
+    maxFixAttempts,
+    isOpen,
+    fixStatus,
+    fixAttempts,
+    pendingPatch,
+    runAutoFix,
+  ]);
 
 
   return (
@@ -927,6 +974,11 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         clearConsole,
         autoFixEnabled,
         setAutoFixEnabled,
+        maxFixAttempts,
+        setMaxFixAttempts,
+        fixSkip,
+        clearFixSkip,
+        fixCharge,
         reviewBeforeApply,
         setReviewBeforeApply,
         fixStatus,
