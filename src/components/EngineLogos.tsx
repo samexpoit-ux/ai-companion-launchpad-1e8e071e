@@ -5,6 +5,8 @@
  * as provider badges on the landing page — the product itself never exposes
  * which engine served a request.
  */
+import type { ReactElement } from "react";
+
 export type EngineId =
   | "openai"
   | "claude"
@@ -68,7 +70,7 @@ const KatMark = ({ className }: MarkProps) => (
   </svg>
 );
 
-const MARKS: Record<EngineId, (p: MarkProps) => React.ReactElement> = {
+const MARKS: Record<EngineId, (p: MarkProps) => ReactElement> = {
   openai: OpenAIMark,
   claude: ClaudeMark,
   gemini: GeminiMark,
