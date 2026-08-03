@@ -1669,6 +1669,18 @@ function creditActionFor(message: ChatMessage, hasProject: boolean): CreditActio
 }
 
 function TypingIndicator({ model, adminView = false }: { model: AIModel; adminView?: boolean }) {
+  const [phase, setPhase] = useState(0);
+  const phases = [
+    { label: "Understanding the request", detail: "requirements and context" },
+    { label: "Planning the delivery", detail: "structure, state and edge cases" },
+    { label: "Building and validating", detail: "files, imports and preview" },
+  ];
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setPhase((current) => Math.min(current + 1, phases.length - 1)), 2400);
+    return () => window.clearInterval(timer);
+  }, [phases.length]);
+
   return (
     <div className="flex gap-3 sm:gap-4">
       <div
@@ -1690,16 +1702,12 @@ function TypingIndicator({ model, adminView = false }: { model: AIModel; adminVi
         </div>
         <ActivityCard
           busy
-          title="Working on it…"
-          steps={[
-            { label: "Analysed the prompt", detail: "smart cost router", done: true },
-            {
-              label: "Routed to the best-value engine",
-              detail: adminView ? model.name : "smart cost router",
-              done: true,
-            },
-            { label: "Thinking and writing the response", done: false },
-          ]}
+          title={phases[phase].label}
+          steps={phases.map((item, index) => ({
+            ...item,
+            detail: index === 0 && adminView ? `${item.detail} · ${model.name}` : item.detail,
+            done: index < phase,
+          }))}
         />
       </div>
     </div>
