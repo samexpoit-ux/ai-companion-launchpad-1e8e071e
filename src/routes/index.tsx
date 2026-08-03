@@ -4,6 +4,10 @@ import {
   ArrowRight,
   Boxes,
   Braces,
+  Brain,
+  Bug,
+  FileSearch,
+  MessageSquare,
   Check,
   Container,
   Database,
@@ -25,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { BrandMark, BrandWordmark } from "@/components/BrandMark";
 import nexuraLogo from "@/assets/nexura-mark.png";
+import { EngineLogo } from "@/components/EngineLogos";
+import { PLANS } from "@/lib/plans";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
@@ -322,11 +328,11 @@ function LandingPage() {
                   }`}
                 >
                   <span
-                    className="grid h-8 w-8 place-items-center rounded-xl text-sm font-bold text-white"
+                    className="grid h-9 w-9 place-items-center rounded-xl text-white"
                     style={{ background: engine.accent }}
                     aria-hidden
                   >
-                    {engine.mono}
+                    <EngineLogo id={engine.id} className="h-5 w-5" />
                   </span>
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold tracking-tight text-ink-900">
