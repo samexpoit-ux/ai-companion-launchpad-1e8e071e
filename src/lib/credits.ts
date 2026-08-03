@@ -14,6 +14,7 @@ export type CreditAction =
   | "plan" // plan / architecture mode
   | "code" // build or edit a project (coding tier)
   | "autofix" // AI patch for a runtime error
+  | "image" // generate an image asset for the build
   | "preview_run" // compiling + running the sandbox preview
   | "export"; // download / export a project
 
@@ -25,7 +26,7 @@ export interface ActionRule {
   /** Extra credits per 1000 characters of prompt/context. */
   perKChars: number;
   /** Router tier this action maps to. */
-  tier: "fast" | "chat" | "reason" | "code" | "fix";
+  tier: "fast" | "chat" | "reason" | "code" | "fix" | "image";
   /** Internal (admin-only) note — may name the upstream engines. */
   note: string;
   /** Customer-safe note — never names a model or provider. */
@@ -69,6 +70,15 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     note: "Focused coding repair",
     customerNote: "Focused repair engine",
   },
+  image: {
+    action: "image",
+    label: "Generate image",
+    base: 0.12,
+    perKChars: 0.01,
+    tier: "image",
+    note: "Cheapest image model (gemini-2.5-flash-image)",
+    customerNote: "Image generation engine",
+  },
   preview_run: {
     action: "preview_run",
     label: "Run preview",
@@ -107,7 +117,13 @@ export function actualUsageCost(
   const outputTokens = Math.max(0, usage.outputTokens ?? 0);
   const inputRate = rule.perKChars * 0.35;
   const outputRate =
-    action === "code" || action === "autofix" ? 0.05 : action === "plan" ? 0.025 : 0.02;
+    action === "code" || action === "autofix"
+      ? 0.05
+      : action === "image"
+        ? 0.06
+        : action === "plan"
+          ? 0.025
+          : 0.02;
   return Math.max(
     0.01,
     round(rule.base + (inputTokens / 1000) * inputRate + (outputTokens / 1000) * outputRate),
