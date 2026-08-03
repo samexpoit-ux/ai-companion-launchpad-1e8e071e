@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { framerMotion } from "@/lib/preview-shims";
+import { framerMotion } from "./preview-shims";
 
 describe("framer-motion preview shim", () => {
   it("exposes the hooks generated projects actually import", () => {
