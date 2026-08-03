@@ -195,7 +195,8 @@ function runProject(
     cache.set(path, mod.exports);
 
     const req = (id: string) => {
-      if (id in EXTERNALS) return EXTERNALS[id];
+      const external = resolveExternal(id);
+      if (external !== undefined) return external;
       const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
       if (resolved) return load(resolved);
       if (/\.(css|scss|sass|less)$/.test(id)) return {};
