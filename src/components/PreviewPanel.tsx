@@ -23,6 +23,9 @@ import {
   Check,
   Layers,
   Square,
+  Info,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -530,6 +533,11 @@ function PreviewConsole({
 function AutoFixBar({
   status,
   attempts,
+  limit,
+  enabled,
+  skip,
+  charge,
+  onToggleEnabled,
   errors,
   log,
   error,
@@ -539,6 +547,11 @@ function AutoFixBar({
 }: {
   status: string;
   attempts: number;
+  limit: number;
+  enabled: boolean;
+  skip: FixSkip | null;
+  charge: FixCharge | null;
+  onToggleEnabled: () => void;
   errors: string[];
   log: Array<{ attempt: number; summary: string; model?: string; ok: boolean }>;
   error: string | null;
@@ -546,7 +559,7 @@ function AutoFixBar({
   onCancel: () => void;
   onReset: () => void;
 }) {
-  if (status === "idle" && errors.length === 0) return null;
+  if (status === "idle" && errors.length === 0 && !skip) return null;
 
   const last = log[log.length - 1];
 
@@ -573,14 +586,37 @@ function AutoFixBar({
 
       <div className="min-w-0 flex-1">
         <div className="font-medium">
-          {status === "fixing" && `Auto-fixing… attempt ${attempts} of ${MAX_FIX_ATTEMPTS}`}
+          {status === "fixing" && `Auto-fixing… attempt ${attempts} of ${limit}`}
           {status === "review" && `Patch ready for review — attempt ${attempts}`}
           {status === "detected" &&
-            `Preview check found ${errors.length} issue${errors.length > 1 ? "s" : ""} · repairing in the background`}
+            (enabled
+              ? `Preview check found ${errors.length} issue${errors.length > 1 ? "s" : ""} · repairing in the background`
+              : `Preview check found ${errors.length} issue${errors.length > 1 ? "s" : ""} · automatic repair is off`)}
           {status === "fixed" && (last?.summary ?? "Patch applied")}
           {status === "failed" && (error ?? "Auto-fix failed")}
-          {status === "exhausted" && `Still failing after ${MAX_FIX_ATTEMPTS} AI attempts`}
+          {status === "exhausted" &&
+            `Stopped after ${limit} AI attempt${limit > 1 ? "s" : ""} — retry limit reached`}
         </div>
+        {/* Always say WHY a repair did not run, so a skipped fix never looks broken. */}
+        {skip && (
+          <div
+            className={cn(
+              "mt-1 flex flex-wrap items-center gap-x-1.5 text-2xs",
+              skip.benign ? "opacity-80" : "font-medium opacity-90",
+            )}
+          >
+            <Info className="h-3 w-3 shrink-0" />
+            <span>{skip.reason}</span>
+            {skip.detail && <span className="opacity-75">— {skip.detail}</span>}
+          </div>
+        )}
+        {charge ? (
+          <div className="mt-0.5 font-mono text-2xs opacity-70">
+            {charge.unlimited
+              ? "repair credits: unlimited"
+              : `repair cost ${formatCredits(charge.charged)} · ${formatCredits(charge.remaining)} credits left`}
+          </div>
+        ) : null}
         {errors.length > 0 && (status === "failed" || status === "exhausted") && (
           <pre className="mt-1 max-h-16 overflow-auto whitespace-pre-wrap break-words font-mono text-2xs opacity-80">
             {errors.slice(-2).join("\n")}
@@ -594,6 +630,21 @@ function AutoFixBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={onToggleEnabled}
+          aria-pressed={enabled}
+          title={enabled ? "Disable automatic repair" : "Enable automatic repair"}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-md border px-2 py-1 text-2xs transition",
+            enabled
+              ? "border-current/25 bg-white/70 hover:bg-white/90"
+              : "border-current/20 bg-white/40 opacity-80 hover:opacity-100",
+          )}
+        >
+          {enabled ? <ToggleRight className="h-3 w-3" /> : <ToggleLeft className="h-3 w-3" />}
+          Auto {enabled ? "on" : "off"}
+        </button>
         {status === "fixing" && (
           <button
             onClick={onCancel}
