@@ -672,11 +672,12 @@ function ChatWorkspaceInner() {
   const cancelGeneration = useCallback(() => requestAbortRef.current?.abort(), []);
 
   const applyVoiceDraft = useCallback(() => {
-    const text = voiceDraft.trim();
+    const text = `${voiceDraft}${voiceDraft && voice.partialTranscript ? " " : ""}${voice.partialTranscript}`.trim();
     if (text) setInput((current) => `${current}${current.trim() ? " " : ""}${text}`);
     setVoiceDraft("");
+    voice.clearPartialTranscript();
     taRef.current?.focus();
-  }, [voiceDraft]);
+  }, [voiceDraft, voice]);
 
   useEffect(() => {
     const onHotkey = (event: KeyboardEvent) => {
@@ -1251,7 +1252,7 @@ function ChatWorkspaceInner() {
                         className="w-full resize-none bg-transparent text-sm text-ink-900 outline-none"
                       />
                       <div className="mt-1.5 flex justify-end gap-2">
-                        <Button type="button" variant="ghost" size="sm" onClick={() => { voice.stop(); setVoiceDraft(""); }}>Discard</Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => { voice.stop(); voice.clearPartialTranscript(); setVoiceDraft(""); }}>Discard</Button>
                         <Button type="button" size="sm" onClick={() => { voice.stop(); applyVoiceDraft(); }}>Insert transcript</Button>
                       </div>
                     </div>
