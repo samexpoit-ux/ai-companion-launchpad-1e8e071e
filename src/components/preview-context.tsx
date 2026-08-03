@@ -590,6 +590,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, []);
 
 
+  // How many times each sandbox-level fault has already been self-healed.
+  const sandboxHealRef = useRef<Map<string, number>>(new Map());
+
   const runAutoFix = useCallback(async () => {
     const current = payloadRef.current;
     if (!current || busyRef.current) return;
@@ -628,6 +631,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
       // Environment faults never reach the model — reload the sandbox instead.
       if (errors.every(isSandboxFault)) {
+        const key = errorSignature(errors);
+        const healed = sandboxHealRef.current.get(key) ?? 0;
+        sandboxHealRef.current.set(key, healed + 1);
         setRuntimeErrors([]);
         setFixLog((l) => [
           ...l,
@@ -638,7 +644,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
             ok: true,
           },
         ]);
-        setRevision((r) => r + 1);
+        // Reload at most once per distinct fault so a shim gap can never turn
+        // into an endless reload loop.
+        if (healed === 0) setRevision((r) => r + 1);
         setFixAttempts(0);
         setFixStatus("fixed");
         return;
