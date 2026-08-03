@@ -508,10 +508,15 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       setRuntimeErrors([]);
       setPendingPatch(null);
       const note = patch.changedPaths.length ? ` (${patch.changedPaths.join(", ")})` : "";
+      historyRef.current = [
+        ...historyRef.current,
+        { attempt: patch.attempt, summary: patch.summary + note, ok: true },
+      ].slice(-5);
       setFixLog((l) => [
         ...l,
         { attempt: patch.attempt, summary: patch.summary + note, model: patch.model, at: Date.now(), ok: true },
       ]);
+
       pushVersion(
         patch.next,
         `AI patch · attempt ${patch.attempt}`,
