@@ -50,15 +50,50 @@ export const Route = createFileRoute("/")({
 
 /** Marketing-only engine badges — the product itself never exposes model picks. */
 const ENGINES = [
-  { name: "Claude", tag: "Anthropic", mono: "C", accent: "#D97757" },
-  { name: "GPT", tag: "OpenAI", mono: "G", accent: "#10A37F" },
-  { name: "Gemini", tag: "Google", mono: "◆", accent: "#4285F4" },
-  { name: "DeepSeek", tag: "DeepSeek", mono: "D", accent: "#4D6BFE" },
-  { name: "Qwen", tag: "Alibaba", mono: "Q", accent: "#7C3AED" },
-  { name: "Nemotron", tag: "NVIDIA", mono: "N", accent: "#76B900" },
-  { name: "Gemma", tag: "Google", mono: "▲", accent: "#1A73E8" },
-  { name: "Kat Coder", tag: "Kwai", mono: "K", accent: "#F43F5E" },
+  { name: "Claude", tag: "Anthropic", id: "claude", accent: "#D97757" },
+  { name: "GPT", tag: "OpenAI", id: "openai", accent: "#10A37F" },
+  { name: "Gemini", tag: "Google", id: "gemini", accent: "#4285F4" },
+  { name: "DeepSeek", tag: "DeepSeek", id: "deepseek", accent: "#4D6BFE" },
+  { name: "Qwen", tag: "Alibaba", id: "qwen", accent: "#7C3AED" },
+  { name: "Nemotron", tag: "NVIDIA", id: "nvidia", accent: "#76B900" },
+  { name: "Gemma", tag: "Google", id: "gemma", accent: "#1A73E8" },
+  { name: "Kat Coder", tag: "Kwai", id: "kat", accent: "#F43F5E" },
 ] as const;
+
+/** AI capabilities highlighted on the landing page. */
+const AI_FEATURES = [
+  {
+    icon: Brain,
+    title: "Thinking before building",
+    body: "Every prompt is planned first — scope, files and data model — then written, so you get a coherent project instead of a pile of snippets.",
+  },
+  {
+    icon: MessageSquare,
+    title: "Chat, plan & build modes",
+    body: "Ask questions, draft an architecture, or ship code. The workspace switches intent without losing your thread.",
+  },
+  {
+    icon: ImageIcon,
+    title: "AI image generation",
+    body: "Generate hero art, icons and illustrations right inside a build and drop them straight into your project.",
+  },
+  {
+    icon: Mic,
+    title: "Voice to prompt",
+    body: "Dictate a feature request, edit the transcript, then send it — hotkeys included.",
+  },
+  {
+    icon: FileSearch,
+    title: "Attachment understanding",
+    body: "Drop screenshots, specs or source files and the builder reads them as part of the request.",
+  },
+  {
+    icon: Bug,
+    title: "Self-healing builds",
+    body: "Runtime errors are detected, explained in plain language and patched automatically — always shown as a reviewable diff.",
+  },
+] as const;
+
 
 const STACKS = [
   { icon: Braces, label: "JavaScript & TypeScript" },
