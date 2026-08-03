@@ -405,33 +405,49 @@ function LandingPage() {
 
             {/* preview */}
             <div className="p-5">
-              <div className="rounded-2xl border border-ink-200 bg-ink-100/50 p-4">
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-sm font-semibold tracking-tight text-ink-900">
-                    Revenue dashboard
-                  </span>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-2xs text-ink-500 ring-1 ring-ink-200">
-                    Live
-                  </span>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  {["MRR", "Users", "Churn"].map((k) => (
-                    <div key={k} className="rounded-xl bg-white p-2.5 shadow-ds-xs">
-                      <p className="text-2xs uppercase tracking-wider text-ink-500">{k}</p>
-                      <p className="mt-1 font-display text-base font-semibold text-ink-900">—</p>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 flex h-24 items-end gap-1.5 rounded-xl bg-white p-3 shadow-ds-xs">
-                  {[35, 52, 44, 68, 59, 82, 74, 96].map((h, i) => (
+              <div className="overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-ds-xs">
+                <div className="flex items-center justify-between border-b border-ink-200 px-3.5 py-2.5">
+                  <span className="flex items-center gap-1.5">
                     <span
-                      key={i}
-                      className="flex-1 rounded-t-md"
-                      style={{ height: `${h}%`, background: "var(--iris-gradient)" }}
+                      className="h-4 w-4 rounded-md"
+                      style={{ background: "var(--iris-gradient)" }}
+                      aria-hidden
                     />
-                  ))}
+                    <span className="text-2xs font-semibold tracking-tight text-ink-900">
+                      Your generated app
+                    </span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[color:var(--color-mint-soft)] px-2 py-0.5 text-2xs font-semibold text-[color:var(--color-mint)]">
+                    <Check className="h-3 w-3" aria-hidden /> 0 errors
+                  </span>
+                </div>
+                <div className="p-3.5">
+                  <div
+                    className="rounded-xl px-3.5 py-5 text-[color:var(--color-iris-fg)]"
+                    style={{ background: "var(--admin-gradient)" }}
+                  >
+                    <p className="font-display text-sm font-semibold tracking-tight">
+                      Auth, billing & database — wired
+                    </p>
+                    <p className="mt-1 text-2xs text-white/70">
+                      Routes, schema and policies generated for you.
+                    </p>
+                    <span className="mt-3 inline-flex rounded-lg bg-white/15 px-2.5 py-1 text-2xs font-semibold ring-1 ring-inset ring-white/20">
+                      Get started
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {[Database, ShieldCheck, Layers].map((Icon, i) => (
+                      <div key={i} className="rounded-xl bg-ink-100/70 p-2.5">
+                        <Icon className="h-3.5 w-3.5 text-[color:var(--color-iris)]" aria-hidden />
+                        <span className="mt-2 block h-1.5 w-3/4 rounded-full bg-ink-200" />
+                        <span className="mt-1.5 block h-1.5 w-1/2 rounded-full bg-ink-200/70" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
+
               <div className="mt-3 flex flex-wrap gap-2">
                 {STACKS.slice(0, 4).map((s) => (
                   <span
