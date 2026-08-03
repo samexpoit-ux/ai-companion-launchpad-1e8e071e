@@ -128,8 +128,10 @@ export function profitSummary(
     })),
     byUser: group(rows, price, (r) => ({
       key: r.userId,
-      label: r.email ?? r.userId.slice(0, 8),
+      label: r.displayName ?? r.email ?? `Account ${r.userId.slice(0, 8)}`,
+      sub: r.displayName && r.email ? r.email : undefined,
     })).slice(0, 20),
+
     byModel: group(rows, price, (r) => {
       const model = r.upstreamModel ?? r.model ?? "unknown";
       return { key: model, label: model };
