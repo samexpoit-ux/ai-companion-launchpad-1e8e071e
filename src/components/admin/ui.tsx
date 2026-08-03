@@ -120,8 +120,8 @@ export function StatCard({
             className={cn(
               "ml-auto shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold",
               positive
-                ? "bg-[color:var(--color-mint)]/15 text-[color:var(--color-mint-ink,var(--color-iris-ink))]"
-                : "bg-[color:var(--color-flare)]/15 text-[color:var(--color-flare)]",
+                ? "bg-[color:var(--color-mint-soft)] text-[color:var(--color-mint)]"
+                : "bg-[color:var(--color-flare-soft)] text-[color:var(--color-flare)]",
             )}
           >
             {delta}
@@ -218,9 +218,9 @@ export function Pill({
 }) {
   const tones: Record<string, string> = {
     neutral: "bg-ink-200/70 text-ink-700",
-    good: "bg-[color:var(--color-mint)]/18 text-ink-800",
-    warn: "bg-[color:var(--color-sun)]/22 text-ink-800",
-    bad: "bg-[color:var(--color-flare)]/16 text-[color:var(--color-flare)]",
+    good: "bg-[color:var(--color-mint-soft)] text-[color:var(--color-mint)]",
+    warn: "bg-[color:var(--color-sun-soft)] text-[color:var(--color-sun)]",
+    bad: "bg-[color:var(--color-flare-soft)] text-[color:var(--color-flare)]",
     accent: "bg-[color:var(--color-iris-soft)] text-[color:var(--color-iris-ink)]",
   };
   return (
