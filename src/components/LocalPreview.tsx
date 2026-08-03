@@ -5,7 +5,7 @@ import * as LucideIcons from "lucide-react";
 import { transform } from "@babel/standalone";
 import { resolveAlias, resolveModule } from "@/lib/artifact";
 import { previewStyleTag } from "@/lib/preview-theme";
-import { injectTailwind } from "@/lib/preview-tailwind";
+import { injectTailwind, loadTailwindRuntime } from "@/lib/preview-tailwind";
 
 import { classNameShims, framerMotion, reactRouterDom } from "@/lib/preview-shims";
 
@@ -150,12 +150,73 @@ function makeRequire() {
 }
 
 
+/**
+ * Build cache.
+ *
+ * Babel is the slowest part of a preview reload, and most reloads only touch
+ * one file: a patch, a keystroke, a sandbox re-mount. Compiled output is keyed
+ * by path + exact source, so unchanged modules are never transpiled twice and
+ * an incremental reload costs roughly one file instead of the whole project.
+ */
+const buildCache = new Map<string, string>();
+const BUILD_CACHE_MAX = 400;
+
+function cacheKey(path: string, source: string) {
+  // Cheap 32-bit rolling hash keeps the key small for large files.
+  let h = 2166136261;
+  for (let i = 0; i < source.length; i++) {
+    h ^= source.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `${path}::${source.length}::${(h >>> 0).toString(36)}`;
+}
+
 function compileModule(path: string, source: string) {
-  return transform(source, {
-    filename: path,
-    presets: [["react", { runtime: "classic" }], "typescript"],
-    plugins: ["transform-modules-commonjs"],
-  }).code;
+  const key = cacheKey(path, source);
+  const hit = buildCache.get(key);
+  if (hit !== undefined) return hit;
+
+  const out =
+    transform(source, {
+      filename: path,
+      presets: [["react", { runtime: "classic" }], "typescript"],
+      plugins: ["transform-modules-commonjs"],
+    }).code ?? "";
+
+  if (buildCache.size >= BUILD_CACHE_MAX) {
+    // Simple FIFO eviction — the working set is one project at a time.
+    const oldest = buildCache.keys().next().value;
+    if (oldest) buildCache.delete(oldest);
+  }
+  buildCache.set(key, out);
+  return out;
+}
+
+/**
+ * Warm the heavy, shared parts of the preview runtime (Tailwind compiler, web
+ * fonts) before the user ever opens the Preview tab, so the first paint is not
+ * blocked on a cold fetch.
+ */
+let prefetched = false;
+export function prefetchPreviewAssets() {
+  if (prefetched || typeof document === "undefined") return;
+  prefetched = true;
+  void loadTailwindRuntime();
+  for (const [rel, href] of [
+    ["preconnect", "https://fonts.googleapis.com"],
+    ["preconnect", "https://fonts.gstatic.com"],
+    [
+      "prefetch",
+      "https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=Space+Grotesk:wght@400..700&display=swap",
+    ],
+  ] as const) {
+    if (document.head.querySelector(`link[rel="${rel}"][href="${href}"]`)) continue;
+    const link = document.createElement("link");
+    link.rel = rel;
+    link.href = href;
+    if (rel === "preconnect") link.crossOrigin = "anonymous";
+    document.head.appendChild(link);
+  }
 }
 
 /**
@@ -178,6 +239,7 @@ function runProject(
 
     if (/\.css$/.test(path)) {
       const style = doc.createElement("style");
+      style.dataset["nexuraProjectCss"] = path;
       style.textContent = source;
       doc.head.appendChild(style);
       const empty = {};
