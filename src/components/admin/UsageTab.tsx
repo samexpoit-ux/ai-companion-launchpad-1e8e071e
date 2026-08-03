@@ -172,9 +172,10 @@ export function UsageTab() {
               Per-request breakdown
               {selectedUser && (
                 <span className="ml-1.5 font-normal text-ink-500">
-                  — {selectedUser.email ?? selectedUser.userId.slice(0, 8)}
+                  — {selectedUser.displayName ?? selectedUser.email ?? `Account ${selectedUser.userId.slice(0, 8)}`}
                 </span>
               )}
+
             </h2>
             {selected && (
               <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
