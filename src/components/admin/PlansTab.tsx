@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listPlans, savePlan, type PlanRow } from "@/lib/admin-api";
+import { MIN_PACKAGE_CREDITS, MIN_TOPUP_CREDITS } from "@/lib/plans";
 
 export function PlansTab() {
   const [rows, setRows] = useState<PlanRow[]>([]);
@@ -23,6 +24,11 @@ export function PlansTab() {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...changes } : r)));
 
   const persist = async (plan: PlanRow) => {
+    // Paid packages start at 200 credits; only the free tier may go below it.
+    if (plan.priceCents > 0 && plan.monthlyCredits < MIN_PACKAGE_CREDITS) {
+      toast.error(`Paid packages must include at least ${MIN_PACKAGE_CREDITS} credits`);
+      return;
+    }
     setSavingId(plan.id);
     try {
       await savePlan(plan);
@@ -37,7 +43,12 @@ export function PlansTab() {
   if (loading) return <p className="text-sm text-ink-500">Loading plans…</p>;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <>
+    <p className="mb-4 text-xs text-ink-600">
+      Packages: 200 / 300 / 500 / 800 credits at $15 / $25 / $40 / $60. Minimum paid package is{" "}
+      {MIN_PACKAGE_CREDITS} credits; minimum top-up is {MIN_TOPUP_CREDITS} credits.
+    </p>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       {rows.map((plan) => (
         <div key={plan.id} className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
           <div className="flex items-center justify-between">
@@ -117,8 +128,14 @@ export function PlansTab() {
           >
             {savingId === plan.id ? "Saving…" : "Save plan"}
           </Button>
+          <p className="text-2xs text-ink-500">
+            {plan.monthlyCredits > 0
+              ? `$${(plan.priceCents / 100 / plan.monthlyCredits).toFixed(4)} per credit`
+              : "Free tier"}
+          </p>
         </div>
       ))}
     </div>
+    </>
   );
 }

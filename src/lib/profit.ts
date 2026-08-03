@@ -16,10 +16,11 @@ export function pricePerCredit(planId: string): number {
   if (!plan || plan.credits <= 0) return 0;
   const usd = Number(plan.price.replace(/[^0-9.]/g, "")) || 0;
   return usd / plan.credits;
+  // 200/$15 → $0.075, 300/$25 → $0.083, 500/$40 → $0.08, 800/$60 → $0.075.
 }
 
 /** Default sell price per credit: the Starter tier's implied rate. */
-export const DEFAULT_PRICE_PER_CREDIT = pricePerCredit("starter") || 0.095;
+export const DEFAULT_PRICE_PER_CREDIT = pricePerCredit("starter") || 0.075;
 
 export interface ProfitRow {
   key: string;
