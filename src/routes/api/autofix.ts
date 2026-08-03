@@ -18,6 +18,10 @@ interface AutofixBody {
   /** Multi-file artifact project (path -> source). */
   files?: Record<string, string>;
   entry?: string;
+  /** true when the exact same failure survived the previous patch. */
+  persisted?: boolean;
+  /** What earlier attempts in this session tried, newest last. */
+  history?: Array<{ attempt?: number; summary?: string; ok?: boolean }>;
 }
 
 const FIX_SYSTEM = `You are Nexura AI Auto-Fix — an expert runtime debugger.
@@ -117,6 +121,26 @@ export const Route = createFileRoute("/api/autofix")({
           throw err;
         }
 
+        const history = Array.isArray(body.history)
+          ? body.history
+              .slice(-3)
+              .map(
+                (h, i) =>
+                  `${h.attempt ?? i + 1}. ${h.ok === false ? "[failed] " : ""}${String(h.summary ?? "").slice(0, 300)}`,
+              )
+          : [];
+        const retryNotes = [
+          ...(history.length
+            ? ["", "Previous repair attempts in this session:", history.join("\n")]
+            : []),
+          ...(body.persisted
+            ? [
+                "",
+                "IMPORTANT: these exact errors survived the previous patch. Do not repeat the same change — find the real root cause (wrong import path, missing export, state used before it exists, wrong data shape) and fix that instead.",
+              ]
+            : []),
+        ];
+
         const userPrompt = isProject
           ? [
               `Entry file: ${body.entry ?? "src/App.tsx"}`,
@@ -124,6 +148,7 @@ export const Route = createFileRoute("/api/autofix")({
               "",
               "Console errors captured in the live preview:",
               errors.map((e, i) => `${i + 1}. ${e}`).join("\n"),
+              ...retryNotes,
               "",
               "Project files:",
               Object.entries(files!)
@@ -136,6 +161,7 @@ export const Route = createFileRoute("/api/autofix")({
               "",
               "Console errors captured in the live preview:",
               errors.map((e, i) => `${i + 1}. ${e}`).join("\n"),
+              ...retryNotes,
               "",
               "Current file:",
               "```",
