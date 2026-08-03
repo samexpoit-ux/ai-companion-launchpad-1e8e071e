@@ -28,7 +28,7 @@ time, so rerun `deploy/deploy.sh` after changing them.
 ## 1) One-time server setup
 ```bash
 ssh root@169.58.105.190
-curl -fsSL https://raw.githubusercontent.com/samexpoit-ux/ai-companion-launchpad/main/deploy/vps-setup.sh -o vps-setup.sh
+curl -fsSL https://raw.githubusercontent.com/samexpoit-ux/ai-companion-launchpad-1e8e071e/main/deploy/vps-setup.sh -o vps-setup.sh
 bash vps-setup.sh
 ```
 Or if the repo isn't pushed yet: `scp -r deploy root@169.58.105.190:/root/` then `bash /root/deploy/vps-setup.sh`.

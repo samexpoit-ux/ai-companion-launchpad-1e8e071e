@@ -1,6 +1,6 @@
 # AI Companion Launchpad
 
-first of all ai github repo copy koro or clone koro then ami vps and domain setup korbo then ai workspace new github a connect korbo : https://github.com/abexpoit-blip/ai-companion-platform
+first of all ai github repo copy koro or clone koro then ami vps and domain setup korbo then ai workspace new github a connect korbo : https://github.com/samexpoit-ux/ai-companion-launchpad-1e8e071e
 
 This project was built with [Lovable](https://lovable.dev).
 

@@ -4,6 +4,15 @@ set -euo pipefail
 APP_DIR="/var/www/nexuraai"
 cd "$APP_DIR"
 git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+
+# Keep the server pointed at the current GitHub repo (it moved once already).
+REPO_URL="${REPO_URL:-https://github.com/samexpoit-ux/ai-companion-launchpad-1e8e071e.git}"
+CURRENT_URL="$(git remote get-url origin 2>/dev/null || echo '')"
+if [ "$CURRENT_URL" != "$REPO_URL" ]; then
+  echo "==> origin: $CURRENT_URL -> $REPO_URL"
+  git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL"
+fi
+
 # generated files (routeTree.gen.ts, lockfile, etc.) are rewritten by the build
 # on the server, so discard local changes before pulling.
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"

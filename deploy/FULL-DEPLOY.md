@@ -10,9 +10,9 @@ VPS `169.58.105.190` · domain `nexuraai.dev` · self-hosted Supabase `supabase.
 # first time only
 cd /path/to/your/checkout
 git init                                  # skip if already a repo
-git remote add origin https://github.com/samexpoit-ux/ai-companion-launchpad.git
+git remote add origin https://github.com/samexpoit-ux/ai-companion-launchpad-1e8e071e.git
 # if the remote already exists:
-git remote set-url origin https://github.com/samexpoit-ux/ai-companion-launchpad.git
+git remote set-url origin https://github.com/samexpoit-ux/ai-companion-launchpad-1e8e071e.git
 
 git add -A
 git commit -m "deploy: nexura ai"
@@ -35,7 +35,7 @@ ssh root@169.58.105.190
 
 apt-get update -y && apt-get install -y git curl rsync
 mkdir -p /var/www
-git clone https://github.com/samexpoit-ux/ai-companion-launchpad.git /var/www/nexuraai
+git clone https://github.com/samexpoit-ux/ai-companion-launchpad-1e8e071e.git /var/www/nexuraai
 git config --global --add safe.directory /var/www/nexuraai
 
 # node 22 + bun + nginx + ufw + systemd + SSL for nexuraai.dev
