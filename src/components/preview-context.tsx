@@ -242,6 +242,27 @@ function isNoise(message: string) {
   return IGNORED.some((re) => re.test(m));
 }
 
+/**
+ * Stable fingerprint of an error batch: line numbers, hashes and object ids are
+ * stripped so "the same failure again" is recognised across reloads. Used to
+ * (a) tell the fixer a previous patch did not work and (b) give a genuinely new
+ * error a fresh attempt budget instead of dying on "exhausted".
+ */
+function errorSignature(errors: string[]) {
+  return errors
+    .map((e) =>
+      e
+        .toLowerCase()
+        .replace(/\d+/g, "#")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 160),
+    )
+    .sort()
+    .join(" | ");
+}
+
+
 let versionSeq = 0;
 const newVersionId = () => `v${Date.now().toString(36)}-${(versionSeq++).toString(36)}`;
 
