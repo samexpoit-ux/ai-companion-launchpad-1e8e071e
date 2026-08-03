@@ -524,8 +524,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
   const runAutoFix = useCallback(async () => {
     const current = payloadRef.current;
-    const errors = errorsRef.current;
-    if (!current || errors.length === 0 || busyRef.current) return;
+    if (!current || busyRef.current) return;
 
     busyRef.current = true;
     const attempt = attemptsRef.current + 1;
@@ -534,14 +533,44 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixError(null);
 
     try {
+      // Pre-flight: static build/lint pass gives the model precise, file-scoped
+      // diagnostics (unresolved imports, syntax, missing default export) instead
+      // of only the vague runtime message the sandbox managed to capture.
+      let staticIssues: string[] = [];
+      try {
+        const { validateProject, validateSingle } = await import("@/lib/validate");
+        const result = current.files
+          ? await validateProject(current.files, current.entry)
+          : await validateSingle(current.code, current.lang);
+        staticIssues = result.issues
+          .filter((i) => i.level === "error")
+          .slice(0, 8)
+          .map((i) => `${i.path}${i.line ? `:${i.line}` : ""} — ${i.message}`);
+      } catch {
+        /* validation is best-effort */
+      }
+
+      const errors = [...new Set([...staticIssues, ...errorsRef.current])].slice(0, 10);
+      if (errors.length === 0) {
+        setFixStatus("fixed");
+        return;
+      }
+
+      const signature = errorSignature(errors);
+      const persisted = signature === lastSignatureRef.current;
+      lastSignatureRef.current = signature;
+
       const res = await apiFetch("/api/autofix", {
         code: current.code,
         lang: current.lang,
         errors,
         attempt,
+        persisted,
+        history: historyRef.current.slice(-3),
         files: current.files,
         entry: current.entry,
       });
+
       const data = (await res.json()) as {
         code?: string;
         files?: Record<string, string>;
