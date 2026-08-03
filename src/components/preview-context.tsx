@@ -662,6 +662,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       const message = err instanceof Error ? err.message : "Auto-fix failed";
       setApiError((prev) => prev ?? parseApiError(err, "autofix"));
       setFixError(message);
+      historyRef.current = [...historyRef.current, { attempt, summary: message, ok: false }].slice(-5);
       setFixLog((l) => [...l, { attempt, summary: message, at: Date.now(), ok: false }]);
       setFixStatus("failed");
     } finally {
@@ -670,12 +671,20 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, [commitPatch]);
 
   // The loop: new errors -> debounce -> patch -> re-run -> repeat until clean or capped.
+  // A genuinely different failure (new fingerprint) gets a fresh attempt budget,
+  // so one exhausted problem never blocks the fixer for the rest of the session.
   useEffect(() => {
     if (!autoFixEnabled || !isOpen) return;
     if (runtimeErrors.length === 0) return;
     if (fixStatus === "fixing" || fixStatus === "review") return;
     if (pendingPatch) return;
     if (fixAttempts >= MAX_FIX_ATTEMPTS) {
+      if (lastSignatureRef.current && errorSignature(runtimeErrors) !== lastSignatureRef.current) {
+        setFixAttempts(0);
+        setFixError(null);
+        setFixStatus("detected");
+        return;
+      }
       setFixStatus("exhausted");
       return;
     }
@@ -687,6 +696,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [runtimeErrors, autoFixEnabled, isOpen, fixStatus, fixAttempts, pendingPatch, runAutoFix]);
+
 
   return (
     <PreviewContext.Provider
