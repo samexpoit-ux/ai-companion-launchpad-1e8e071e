@@ -194,7 +194,12 @@ export const Route = createFileRoute("/api/autofix")({
         const traceId = newTraceId();
         const attempts: TraceAttempt[] = [];
         try {
-          const result = await runWithFallback(route, messages, (a) => attempts.push(a), request.signal);
+          const result = await runWithFallback(
+            route,
+            messages,
+            (a) => attempts.push(a),
+            request.signal,
+          );
           const finalCharge = await finalizeRequestCost(request, charge.id, "autofix", {
             costUsd: result.costUsd,
             inputTokens: result.inputTokens,

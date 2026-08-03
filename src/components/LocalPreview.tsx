@@ -31,7 +31,6 @@ const BASE_HTML = `<!doctype html><html><head><meta charset="utf-8" />
 <style>html,body{height:100%;margin:0}#root{min-height:100%}</style>
 </head><body><div id="root"></div></body></html>`;
 
-
 const PREVIEW_BRIDGE = `<script>(function(){
   var send=function(type,level,message){ parent.postMessage({source:'nexura-preview',type:type,level:level,message:String(message)}, '*'); };
   ['log','info','warn','error'].forEach(function(level){ var native=console[level].bind(console); console[level]=function(){ var args=[].slice.call(arguments); send('console',level,args.map(function(v){ try{return typeof v==='object'?JSON.stringify(v):String(v)}catch(e){return String(v)} }).join(' ')); native.apply(console,args); }; });
@@ -149,7 +148,6 @@ function makeRequire() {
   };
 }
 
-
 /**
  * Build cache.
  *
@@ -265,7 +263,6 @@ function runProject(
       throw new Error(`Module "${id}" is not available in the live preview (imported by ${path}).`);
     };
 
-    // eslint-disable-next-line no-new-func
     const run = new Function(
       "require",
       "module",
@@ -377,7 +374,6 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
       // Nexura's palette and leave utility classes unstyled.
       void injectTailwind(doc);
 
-
       // Pipe sandbox errors into the auto-fix loop. Incremental reloads reuse
       // the same document, so instrument its console exactly once — otherwise
       // every reload would wrap the wrapper and report each error N times.
@@ -386,32 +382,32 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
       if (flagged.__nexuraInstrumented) {
         /* already piped */
       } else {
-      flagged.__nexuraInstrumented = true;
-      for (const level of ["log", "info", "warn", "error"] as const) {
-        const native = frameConsole[level].bind(frameConsole);
-        frameConsole[level] = (...args: unknown[]) => {
-          const message = args
-            .map((a) => {
-              if (a instanceof Error) return a.message;
-              if (a && typeof a === "object") {
-                try {
-                  return JSON.stringify(a);
-                } catch {
-                  return String(a);
+        flagged.__nexuraInstrumented = true;
+        for (const level of ["log", "info", "warn", "error"] as const) {
+          const native = frameConsole[level].bind(frameConsole);
+          frameConsole[level] = (...args: unknown[]) => {
+            const message = args
+              .map((a) => {
+                if (a instanceof Error) return a.message;
+                if (a && typeof a === "object") {
+                  try {
+                    return JSON.stringify(a);
+                  } catch {
+                    return String(a);
+                  }
                 }
-              }
-              return String(a);
-            })
-            .join(" ");
-          reportConsole(level, message);
-          if (level === "error") reportRuntimeError(message);
-          native(...args);
-        };
-      }
-      win.addEventListener("error", (e) => reportRuntimeError(String((e as ErrorEvent).message)));
-      win.addEventListener("unhandledrejection", (e) =>
-        reportRuntimeError(String((e as PromiseRejectionEvent).reason)),
-      );
+                return String(a);
+              })
+              .join(" ");
+            reportConsole(level, message);
+            if (level === "error") reportRuntimeError(message);
+            native(...args);
+          };
+        }
+        win.addEventListener("error", (e) => reportRuntimeError(String((e as ErrorEvent).message)));
+        win.addEventListener("unhandledrejection", (e) =>
+          reportRuntimeError(String((e as PromiseRejectionEvent).reason)),
+        );
       }
 
       // Drop stylesheets injected by the previous build so repeated reloads do
@@ -435,7 +431,7 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
           const source = ensureDefaultExport(payload.code);
           const out = compileModule(payload.lang === "react-ts" ? "App.tsx" : "App.jsx", source);
           const module: { exports: Record<string, unknown> } = { exports: {} };
-          // eslint-disable-next-line no-new-func
+
           const run = new Function(
             "require",
             "module",
@@ -521,8 +517,6 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
     frame.addEventListener("load", run);
     return () => frame.removeEventListener("load", run);
   }, [isReact, payload.code, payload.lang, reloadKey]);
-
-
 
   /**
    * Visual "select element to edit": while the picker is armed we outline the

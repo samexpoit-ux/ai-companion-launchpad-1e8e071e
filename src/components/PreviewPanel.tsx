@@ -65,7 +65,6 @@ const StackPreview = lazy(() => import("./StackPreview"));
 // Lovable-style "Details" trajectory view (timeline + changed files).
 const TimelinePanel = lazy(() => import("./TimelinePanel"));
 
-
 export function PreviewPanel() {
   const {
     isOpen,
@@ -116,8 +115,6 @@ export function PreviewPanel() {
     () => (payload?.files ? analyzeStack(payload.files) : null),
     [payload?.files],
   );
-
-
 
   // Safe run flow: nothing executes in the sandbox until the user explicitly
   // arms this revision. A new AI patch (new revision) re-locks the preview.
@@ -206,7 +203,6 @@ export function PreviewPanel() {
           )}
         </div>
 
-
         <span className="pointer-events-none hidden min-w-0 shrink truncate rounded-full border border-ink-200 bg-ink-100 px-2 py-1 font-mono text-2xs text-ink-500 lg:inline">
           {payload.files ? `${Object.keys(payload.files).length} files` : payload.lang}
         </span>
@@ -284,8 +280,6 @@ export function PreviewPanel() {
               </button>
             }
           />
-
-
 
           {/* Secondary controls collapse into one menu so the bar never wraps */}
           <DropdownMenu>
@@ -384,8 +378,8 @@ export function PreviewPanel() {
                 ))}
               </div>
               <div className="px-2 pb-1.5 text-2xs leading-snug text-ink-500">
-                Each AI repair spends credits ({formatCredits(credits.quote("autofix"))} per attempt).
-                Sandbox-only faults are healed for free.
+                Each AI repair spends credits ({formatCredits(credits.quote("autofix"))} per
+                attempt). Sandbox-only faults are healed for free.
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setHistoryOpen((h) => !h)}>
@@ -462,7 +456,6 @@ export function PreviewPanel() {
                 device={device}
               />
             )}
-
           </Suspense>
 
           {selection && tab === "preview" ? (
@@ -476,10 +469,10 @@ export function PreviewPanel() {
           {buildError &&
             !pendingPatch &&
             (!autoFixEnabled || fixStatus === "failed" || fixStatus === "exhausted") && (
-            <Suspense fallback={null}>
-              <ErrorOverlay onReload={() => setReloadKey((k) => k + 1)} />
-            </Suspense>
-          )}
+              <Suspense fallback={null}>
+                <ErrorOverlay onReload={() => setReloadKey((k) => k + 1)} />
+              </Suspense>
+            )}
 
           {pendingPatch && (
             <Suspense fallback={null}>
@@ -851,7 +844,9 @@ function SelectionEditor({
         className="mt-2 w-full resize-none rounded-xl border border-ink-200 bg-white px-2.5 py-2 text-xs text-ink-900 outline-none focus:border-[color:var(--color-iris)]"
       />
 
-      {error ? <p className="mt-1 text-2xs text-[color:var(--nx-danger,#DC2626)]">{error}</p> : null}
+      {error ? (
+        <p className="mt-1 text-2xs text-[color:var(--nx-danger,#DC2626)]">{error}</p>
+      ) : null}
 
       <div className="mt-2 flex items-center justify-end gap-2">
         <button
