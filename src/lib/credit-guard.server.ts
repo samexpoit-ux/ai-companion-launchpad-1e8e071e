@@ -109,7 +109,7 @@ export async function chargeRequest(
     return {
       id: String(row.id ?? ""),
       charged: Number(row.charged ?? cost),
-      plan: "pro",
+      plan: "max",
       total: Number(row.total ?? 0),
       used: Number(row.used ?? 0),
       remaining: Number(row.remaining ?? 0),

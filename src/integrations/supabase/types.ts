@@ -135,6 +135,113 @@ export type Database = {
           },
         ]
       }
+      coupon_redemptions: {
+        Row: {
+          code: string
+          commission_cents: number
+          coupon_id: string
+          created_at: string
+          credits_granted: number
+          discount_cents: number
+          id: string
+          paid_cents: number
+          plan_slug: string | null
+          user_id: string
+        }
+        Insert: {
+          code: string
+          commission_cents?: number
+          coupon_id: string
+          created_at?: string
+          credits_granted?: number
+          discount_cents?: number
+          id?: string
+          paid_cents?: number
+          plan_slug?: string | null
+          user_id: string
+        }
+        Update: {
+          code?: string
+          commission_cents?: number
+          coupon_id?: string
+          created_at?: string
+          credits_granted?: number
+          discount_cents?: number
+          id?: string
+          paid_cents?: number
+          plan_slug?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupons: {
+        Row: {
+          bonus_credits: number
+          code: string
+          commission_pct: number
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          max_redemptions: number | null
+          note: string | null
+          plan_slug: string | null
+          reseller_email: string | null
+          reseller_name: string | null
+          times_redeemed: number
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          bonus_credits?: number
+          code: string
+          commission_pct?: number
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          max_redemptions?: number | null
+          note?: string | null
+          plan_slug?: string | null
+          reseller_email?: string | null
+          reseller_name?: string | null
+          times_redeemed?: number
+          updated_at?: string
+          value?: number
+        }
+        Update: {
+          bonus_credits?: number
+          code?: string
+          commission_pct?: number
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          max_redemptions?: number | null
+          note?: string | null
+          plan_slug?: string | null
+          reseller_email?: string | null
+          reseller_name?: string | null
+          times_redeemed?: number
+          updated_at?: string
+          value?: number
+        }
+        Relationships: []
+      }
       credit_audit_log: {
         Row: {
           action: string | null
@@ -775,6 +882,10 @@ export type Database = {
       }
       assert_account_active: { Args: { _user_id: string }; Returns: undefined }
       can_edit_thread: { Args: { _thread: string }; Returns: boolean }
+      check_coupon: {
+        Args: { _code: string; _plan_slug?: string }
+        Returns: Json
+      }
       credit_balance: { Args: { _user_id?: string }; Returns: Json }
       downgrade_to_free: { Args: never; Returns: Json }
       finalize_request_usage: {
@@ -796,6 +907,16 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: { _user_id?: string }; Returns: boolean }
+      record_coupon_redemption: {
+        Args: {
+          _code: string
+          _credits: number
+          _paid_cents: number
+          _plan_slug: string
+          _user_id: string
+        }
+        Returns: Json
+      }
       record_request_cost: {
         Args: {
           _cost_usd: number

@@ -740,3 +740,150 @@ export async function fetchRequestTraces(days = 7, limit = 200): Promise<TraceRe
 
   return { rows, totals };
 }
+
+/* -------------------------------------------------- reseller coupons */
+
+import {
+  normalizeCouponCode,
+  type Coupon,
+  type CouponDraft,
+  type CouponKind,
+} from "@/lib/resellers";
+
+const COUPON_COLUMNS =
+  "id,code,kind,value,plan_slug,bonus_credits,reseller_email,reseller_name,commission_pct,max_redemptions,times_redeemed,expires_at,is_active,note,created_at";
+
+function couponFromRow(r: Record<string, unknown>): Coupon {
+  return {
+    id: String(r["id"]),
+    code: String(r["code"]),
+    kind: String(r["kind"] ?? "percent") as CouponKind,
+    value: Number(r["value"] ?? 0),
+    planSlug: (r["plan_slug"] as string | null) ?? null,
+    bonusCredits: Number(r["bonus_credits"] ?? 0),
+    resellerEmail: (r["reseller_email"] as string | null) ?? null,
+    resellerName: (r["reseller_name"] as string | null) ?? null,
+    commissionPct: Number(r["commission_pct"] ?? 0),
+    maxRedemptions:
+      r["max_redemptions"] == null ? null : Number(r["max_redemptions"]),
+    timesRedeemed: Number(r["times_redeemed"] ?? 0),
+    expiresAt: (r["expires_at"] as string | null) ?? null,
+    isActive: r["is_active"] !== false,
+    note: (r["note"] as string | null) ?? null,
+    createdAt: String(r["created_at"]),
+  };
+}
+
+export async function listCoupons(): Promise<Coupon[]> {
+  const { data, error } = await supabase
+    .from("coupons")
+    .select(COUPON_COLUMNS)
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("[admin] listCoupons failed", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => couponFromRow(r as Record<string, unknown>));
+}
+
+function couponPayload(draft: CouponDraft) {
+  return {
+    code: normalizeCouponCode(draft.code),
+    kind: draft.kind,
+    value: draft.value,
+    plan_slug: draft.planSlug,
+    bonus_credits: Math.max(0, Math.round(draft.bonusCredits)),
+    reseller_email: draft.resellerEmail?.trim() || null,
+    reseller_name: draft.resellerName?.trim() || null,
+    commission_pct: draft.commissionPct,
+    max_redemptions: draft.maxRedemptions,
+    expires_at: draft.expiresAt,
+    is_active: draft.isActive,
+    note: draft.note?.trim() || null,
+  };
+}
+
+export async function createCoupon(draft: CouponDraft): Promise<Coupon> {
+  const payload = couponPayload(draft);
+  if (!payload.code) throw new Error("Coupon code is required");
+  const { data, error } = await supabase
+    .from("coupons")
+    .insert(payload)
+    .select(COUPON_COLUMNS)
+    .single();
+  if (error) throw new Error(error.message);
+  await logAdmin("coupon.created", "coupons", data.id, { code: payload.code });
+  return couponFromRow(data as Record<string, unknown>);
+}
+
+export async function saveCoupon(coupon: Coupon) {
+  const { error } = await supabase
+    .from("coupons")
+    .update(couponPayload(coupon))
+    .eq("id", coupon.id);
+  if (error) throw new Error(error.message);
+  await logAdmin("coupon.updated", "coupons", coupon.id, { code: coupon.code });
+}
+
+export async function deleteCoupon(id: string, code: string) {
+  const { error } = await supabase.from("coupons").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  await logAdmin("coupon.deleted", "coupons", id, { code });
+}
+
+export interface CouponRedemptionRow {
+  id: string;
+  code: string;
+  userId: string;
+  planSlug: string | null;
+  creditsGranted: number;
+  paidCents: number;
+  discountCents: number;
+  commissionCents: number;
+  createdAt: string;
+}
+
+export async function listCouponRedemptions(limit = 200): Promise<CouponRedemptionRow[]> {
+  const { data, error } = await supabase
+    .from("coupon_redemptions")
+    .select("id,code,user_id,plan_slug,credits_granted,paid_cents,discount_cents,commission_cents,created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error("[admin] listCouponRedemptions failed", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => ({
+    id: String(r.id),
+    code: String(r.code),
+    userId: String(r.user_id),
+    planSlug: r.plan_slug ?? null,
+    creditsGranted: Number(r.credits_granted ?? 0),
+    paidCents: Number(r.paid_cents ?? 0),
+    discountCents: Number(r.discount_cents ?? 0),
+    commissionCents: Number(r.commission_cents ?? 0),
+    createdAt: String(r.created_at),
+  }));
+}
+
+/** Record a coupon sale: grants the package + bonus credits and logs commission. */
+export async function redeemCouponForUser(input: {
+  code: string;
+  userId: string;
+  planSlug: string;
+  credits: number;
+  paidCents: number;
+}) {
+  const { error } = await supabase.rpc("record_coupon_redemption", {
+    _code: normalizeCouponCode(input.code),
+    _user_id: input.userId,
+    _plan_slug: input.planSlug,
+    _credits: Math.round(input.credits),
+    _paid_cents: Math.round(input.paidCents),
+  });
+  if (error) throw new Error(error.message);
+  await logAdmin("coupon.redeemed", "coupons", input.userId, {
+    code: input.code,
+    plan: input.planSlug,
+  });
+}

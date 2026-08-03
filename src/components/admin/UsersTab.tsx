@@ -29,7 +29,7 @@ import {
   type AdminUserStats,
 } from "@/lib/admin-api";
 import { formatCredits } from "@/lib/credits";
-import { PLANS, planById } from "@/lib/plans";
+import { MIN_TOPUP_CREDITS, PLANS, PREMIUM_PLAN_ID, planById } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 
 type Filter = "all" | "premium" | "free" | "suspended" | "admins";
@@ -42,7 +42,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: "admins", label: "Admins" },
 ];
 
-const PREMIUM_PLAN = "pro";
+const PREMIUM_PLAN = PREMIUM_PLAN_ID;
 
 export function UsersTab() {
   const [rows, setRows] = useState<AdminUserRow[]>([]);
@@ -100,13 +100,17 @@ export function UsersTab() {
 
   const topUp = (row: AdminUserRow) => {
     const input = window.prompt(
-      `Grant credits to ${row.email ?? "this account"} (negative removes)`,
-      "50",
+      `Grant credits to ${row.email ?? "this account"} — minimum top-up is ${MIN_TOPUP_CREDITS} (negative removes)`,
+      String(MIN_TOPUP_CREDITS),
     );
     if (input === null) return;
     const credits = Number(input);
     if (!Number.isFinite(credits) || credits === 0) {
       toast.error("Enter a non-zero number of credits");
+      return;
+    }
+    if (credits > 0 && credits < MIN_TOPUP_CREDITS) {
+      toast.error(`Minimum top-up is ${MIN_TOPUP_CREDITS} credits`);
       return;
     }
     return run(row, `${credits > 0 ? "Granted" : "Removed"} ${Math.abs(credits)} credits`, () =>
