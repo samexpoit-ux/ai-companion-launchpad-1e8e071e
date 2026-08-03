@@ -27,6 +27,13 @@ interface ChatBody {
   mode?: string;
   /** Thread the charge belongs to, for the ledger. */
   threadId?: string;
+  attachments?: Array<{
+    name?: string;
+    type?: string;
+    size?: number;
+    kind?: "image" | "text";
+    content?: string;
+  }>;
 }
 
 export const Route = createFileRoute("/api/chat")({
@@ -57,6 +64,18 @@ export const Route = createFileRoute("/api/chat")({
                   : ("user" as const),
             content: m.content,
           }));
+
+        const attachments = Array.isArray(body.attachments)
+          ? body.attachments
+              .filter((item) => item && typeof item.name === "string" && typeof item.content === "string")
+              .slice(0, 5)
+              .map((item) => ({
+                name: String(item.name).slice(0, 180),
+                type: String(item.type ?? "application/octet-stream").slice(0, 100),
+                kind: item.kind === "image" ? ("image" as const) : ("text" as const),
+                content: String(item.content).slice(0, item.kind === "image" ? 7_000_000 : 60_000),
+              }))
+          : [];
 
         const lastUser = [...normalizedMessages].reverse().find((m) => m.role === "user");
         const mode = (body.mode ?? "").toLowerCase();
@@ -145,11 +164,49 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         const started = Date.now();
-        const cleanMessages = [
+        const textAttachments = attachments.filter((item) => item.kind === "text");
+        const imageAttachments = attachments.filter(
+          (item) => item.kind === "image" && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(item.content),
+        );
+        const attachmentContext = textAttachments.length
+          ? `\n\nAttached files:\n${textAttachments
+              .map((item) => `--- ${item.name} ---\n${item.content}`)
+              .join("\n\n")}`
+          : "";
+        const cleanMessages: Array<{
+          role: "system" | "user" | "assistant";
+          content: string | Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }>;
+        }> = [
           { role: "system" as const, content: systemPromptFor(route.task) },
-          ...normalizedMessages,
+          ...normalizedMessages.map((message, index) => {
+            const isLastUser = message === lastUser ||
+              (message.role === "user" && index === normalizedMessages.length - 1);
+            if (!isLastUser) return message;
+            const text = `${message.content}${attachmentContext}`;
+            if (imageAttachments.length === 0) return { ...message, content: text };
+            return {
+              ...message,
+              content: [
+                { type: "text" as const, text },
+                ...imageAttachments.map((item) => ({
+                  type: "image_url" as const,
+                  image_url: { url: item.content },
+                })),
+              ],
+            };
+          }),
         ];
-        const promptChars = cleanMessages.reduce((sum, m) => sum + m.content.length, 0);
+        const promptChars = cleanMessages.reduce(
+          (sum, message) =>
+            sum +
+            (typeof message.content === "string"
+              ? message.content.length
+              : message.content.reduce(
+                  (partSum, part) => partSum + (part.type === "text" ? part.text.length : 0),
+                  0,
+                )),
+          0,
+        );
 
         try {
           const { content, tokens, inputTokens, outputTokens, costUsd, upstream } =

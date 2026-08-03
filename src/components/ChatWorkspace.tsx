@@ -90,6 +90,13 @@ import { BrandMark, BrandWordmark, BrandGlyph } from "@/components/BrandMark";
 import { ThemePicker } from "@/components/ThemePicker";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { takePendingPrompt } from "@/lib/pending-prompt";
+import {
+  MAX_ATTACHMENTS,
+  attachmentSummary,
+  prepareAttachment,
+  type ChatAttachment,
+} from "@/lib/chat-attachments";
+import { useVoiceInput } from "@/hooks/useVoiceInput";
 
 import { PreviewProvider, usePreview, isPreviewable } from "@/components/preview-context";
 import { PreviewPanel } from "@/components/PreviewPanel";
@@ -165,6 +172,8 @@ function ChatWorkspaceInner() {
   useEffect(() => setSidebarOpen(!isMobile), [isMobile]);
 
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   // "Ask AI" from the preview's visual editor pre-fills the composer.
   useEffect(() => {
@@ -181,6 +190,27 @@ function ChatWorkspaceInner() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  const appendTranscript = useCallback((transcript: string) => {
+    setInput((current) => `${current}${current.trim() ? " " : ""}${transcript}`);
+  }, []);
+  const voice = useVoiceInput(appendTranscript);
+
+  const addFiles = useCallback(async (files: FileList | null) => {
+    if (!files?.length) return;
+    setAttachmentError(null);
+    try {
+      const available = Math.max(0, MAX_ATTACHMENTS - attachments.length);
+      if (available === 0) throw new Error(`You can attach up to ${MAX_ATTACHMENTS} files.`);
+      const next = await Promise.all(Array.from(files).slice(0, available).map(prepareAttachment));
+      setAttachments((current) => [...current, ...next].slice(0, MAX_ATTACHMENTS));
+      if (files.length > available) setAttachmentError(`Only the first ${available} files were added.`);
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : "Could not attach that file.");
+    }
+  }, [attachments.length]);
 
   // Load conversations from the database (single source of truth).
   useEffect(() => {
@@ -399,6 +429,8 @@ function ChatWorkspaceInner() {
     setActiveId(t.id);
     setLoadedThreads((prev) => new Set(prev).add(t.id));
     setInput("");
+    setAttachments([]);
+    setAttachmentError(null);
     void navigate({ to: "/workspace", search: { thread: t.id }, replace: true });
   };
 
@@ -478,7 +510,12 @@ function ChatWorkspaceInner() {
   );
 
   const sendText = useCallback(
-    async (text: string, thread: ChatThread, requestedMode: "Build" | "Chat" | "Plan" = mode) => {
+    async (
+      text: string,
+      thread: ChatThread,
+      requestedMode: "Build" | "Chat" | "Plan" = mode,
+      requestAttachments: ChatAttachment[] = [],
+    ) => {
       const value = text.trim();
       if (!value) return;
       const action = actionForMode(requestedMode);
@@ -504,7 +541,7 @@ function ChatWorkspaceInner() {
       const userMsg: ChatMessage = {
         id: uid(),
         role: "user",
-        content: value,
+        content: `${value}${attachmentSummary(requestAttachments)}`,
         createdAt: Date.now(),
       };
       const isFirst = thread.messages.length === 0;
@@ -523,13 +560,14 @@ function ChatWorkspaceInner() {
         threadId: thread.id,
         clientId: userMsg.id,
         role: "user",
-        content: value,
+        content: userMsg.content,
       });
       try {
         const reply = await sendChatMessage([...(thread.messages ?? []), userMsg], modelId, {
           plan: credits.plan,
           mode: requestedMode,
           threadId: thread.id,
+          attachments: requestAttachments,
         });
         const asstMsg: ChatMessage = {
           id: uid(),
@@ -596,8 +634,11 @@ function ChatWorkspaceInner() {
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isSending || !active) return;
+    const pendingAttachments = attachments;
     setInput("");
-    await sendText(text, active);
+    setAttachments([]);
+    setAttachmentError(null);
+    await sendText(text, active, mode, pendingAttachments);
   };
 
   // Prompt handed off from the dashboard hero: consumed exactly once, and always
@@ -1065,6 +1106,49 @@ function ChatWorkspaceInner() {
                     "focus-within:shadow-[0_1px_2px_rgba(16,24,40,0.05),0_22px_50px_-20px_color-mix(in_oklab,var(--color-iris)_50%,transparent)]",
                   )}
                 >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    accept="text/*,.md,.csv,.json,.xml,.yaml,.yml,.toml,.js,.jsx,.ts,.tsx,.css,.scss,.html,.php,.py,.rb,.go,.java,.kt,.sql,.sh,.env,.log,image/*"
+                    onChange={(event) => {
+                      void addFiles(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+                  <input
+                    ref={imageInputRef}
+                    type="file"
+                    multiple
+                    className="sr-only"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    onChange={(event) => {
+                      void addFiles(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
+                  {attachments.length > 0 && (
+                    <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto px-4 pt-3 sm:px-5">
+                      {attachments.map((item) => (
+                        <span
+                          key={item.id}
+                          className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-ink-200 bg-ink-100 px-2 py-1 text-xs text-ink-700"
+                        >
+                          {item.kind === "image" ? <ImageIcon className="h-3.5 w-3.5" /> : <Paperclip className="h-3.5 w-3.5" />}
+                          <span className="max-w-40 truncate">{item.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setAttachments((current) => current.filter((file) => file.id !== item.id))}
+                            className="rounded-sm text-ink-400 hover:text-ink-900"
+                            aria-label={`Remove ${item.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <textarea
                     ref={taRef}
                     value={input}
@@ -1088,10 +1172,10 @@ function ChatWorkspaceInner() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" side="top" className="w-52">
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
                           <Paperclip className="mr-2 h-4 w-4" /> Attach a file
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => imageInputRef.current?.click()}>
                           <ImageIcon className="mr-2 h-4 w-4" /> Add an image
                         </DropdownMenuItem>
                         <DropdownMenuItem>
@@ -1149,10 +1233,18 @@ function ChatWorkspaceInner() {
 
                       <button
                         type="button"
-                        aria-label="Voice input"
-                        className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-500 transition-all duration-150 hover:bg-ink-100 hover:text-ink-900 active:scale-95 sm:inline-flex"
+                        aria-label={voice.listening ? "Stop voice input" : "Voice input"}
+                        aria-pressed={voice.listening}
+                        title={voice.supported ? "Voice input" : "Voice input is unavailable in this browser"}
+                        onClick={voice.toggle}
+                        className={cn(
+                          "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-150 hover:bg-ink-100 hover:text-ink-900 active:scale-95",
+                          voice.listening
+                            ? "bg-destructive/10 text-destructive ring-2 ring-destructive/20"
+                            : "text-ink-500",
+                        )}
                       >
-                        <Mic className="h-4 w-4" />
+                        {voice.listening ? <span className="h-2.5 w-2.5 rounded-sm bg-current" /> : <Mic className="h-4 w-4" />}
                       </button>
 
                       <SendButton
@@ -1163,6 +1255,22 @@ function ChatWorkspaceInner() {
                     </div>
                   </div>
                 </div>
+
+                {(attachmentError || voice.error) && (
+                  <div className="mt-2 flex items-center justify-center gap-2 text-xs text-destructive" role="status">
+                    <span>{attachmentError ?? voice.error}</span>
+                    <button
+                      type="button"
+                      className="underline underline-offset-2"
+                      onClick={() => {
+                        setAttachmentError(null);
+                        voice.clearError();
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
 
                 <p className="mt-3 text-center text-2xs leading-relaxed text-ink-400">
                   {credits.unlimited
@@ -1561,6 +1669,18 @@ function creditActionFor(message: ChatMessage, hasProject: boolean): CreditActio
 }
 
 function TypingIndicator({ model, adminView = false }: { model: AIModel; adminView?: boolean }) {
+  const [phase, setPhase] = useState(0);
+  const phases = [
+    { label: "Understanding the request", detail: "requirements and context" },
+    { label: "Planning the delivery", detail: "structure, state and edge cases" },
+    { label: "Building and validating", detail: "files, imports and preview" },
+  ];
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setPhase((current) => Math.min(current + 1, phases.length - 1)), 2400);
+    return () => window.clearInterval(timer);
+  }, [phases.length]);
+
   return (
     <div className="flex gap-3 sm:gap-4">
       <div
@@ -1582,16 +1702,12 @@ function TypingIndicator({ model, adminView = false }: { model: AIModel; adminVi
         </div>
         <ActivityCard
           busy
-          title="Working on it…"
-          steps={[
-            { label: "Analysed the prompt", detail: "smart cost router", done: true },
-            {
-              label: "Routed to the best-value engine",
-              detail: adminView ? model.name : "smart cost router",
-              done: true,
-            },
-            { label: "Thinking and writing the response", done: false },
-          ]}
+          title={phases[phase].label}
+          steps={phases.map((item, index) => ({
+            ...item,
+            detail: index === 0 && adminView ? `${item.detail} · ${model.name}` : item.detail,
+            done: index < phase,
+          }))}
         />
       </div>
     </div>

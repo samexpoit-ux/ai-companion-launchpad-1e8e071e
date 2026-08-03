@@ -262,6 +262,15 @@ function errorSignature(errors: string[]) {
     .join(" | ");
 }
 
+function normalizedError(message: string) {
+  return message
+    .toLowerCase()
+    .replace(/\d+/g, "#")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
 
 let versionSeq = 0;
 const newVersionId = () => `v${Date.now().toString(36)}-${(versionSeq++).toString(36)}`;
@@ -283,7 +292,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const [runtimeErrors, setRuntimeErrors] = useState<string[]>([]);
   const [consoleEntries, setConsoleEntries] = useState<Array<{ id: number; level: "log" | "info" | "warn" | "error"; message: string }>>([]);
   const [autoFixEnabled, setAutoFixEnabled] = useState(true);
-  const [reviewBeforeApply, setReviewBeforeApply] = useState(true);
+  const [reviewBeforeApply, setReviewBeforeApply] = useState(false);
   const [fixStatus, setFixStatus] = useState<FixStatus>("idle");
   const [fixAttempts, setFixAttempts] = useState(0);
   const [fixLog, setFixLog] = useState<FixEntry[]>([]);
@@ -489,7 +498,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const reportRuntimeError = useCallback((message: string) => {
     const clean = String(message ?? "").trim().slice(0, 1200);
     if (!clean || isNoise(clean)) return;
-    setRuntimeErrors((prev) => (prev.includes(clean) ? prev : [...prev, clean].slice(-8)));
+    const signature = normalizedError(clean);
+    setRuntimeErrors((prev) =>
+      prev.some((existing) => normalizedError(existing) === signature)
+        ? prev
+        : [...prev, clean].slice(-8),
+    );
     setFixStatus((s) => (s === "fixing" || s === "review" ? s : "detected"));
   }, []);
 
@@ -641,6 +655,29 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       } else {
         next = { ...current, code: data.code!, files: undefined, entry: undefined };
         changedPaths = ["snippet"];
+      }
+
+      const actuallyChanged = changedPaths.some((path) => {
+        if (path === "snippet") return next.code.trim() !== current.code.trim();
+        return next.files?.[path]?.trim() !== current.files?.[path]?.trim();
+      });
+      if (data.changed === false || !actuallyChanged) {
+        throw new Error("The repair produced no code changes. Manual review is needed.");
+      }
+
+      // Never apply a patch that still fails the same parser/import checks. This
+      // keeps a bad AI response from replacing the last usable preview.
+      const { validateProject, validateSingle } = await import("@/lib/validate");
+      const validation = next.files
+        ? await validateProject(next.files, next.entry)
+        : await validateSingle(next.code, next.lang);
+      if (!validation.ok) {
+        const diagnostic = validation.issues
+          .filter((issue) => issue.level === "error")
+          .slice(0, 3)
+          .map((issue) => `${issue.path}${issue.line ? `:${issue.line}` : ""} — ${issue.message}`)
+          .join("; ");
+        throw new Error(`Proposed patch did not pass validation: ${diagnostic}`);
       }
 
       const patch: PendingPatch = {

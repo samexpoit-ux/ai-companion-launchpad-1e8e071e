@@ -22,7 +22,23 @@ export interface ValidationResult {
   checkedFiles: number;
 }
 
-const EXTERNAL_MODULES = new Set(["react", "react-dom", "react-dom/client", "lucide-react"]);
+// Keep this list aligned with LocalPreview.EXTERNALS. A generated project that
+// uses one of our browser-safe shims must not be falsely rejected by preflight.
+const EXTERNAL_MODULES = new Set([
+  "react",
+  "react/jsx-runtime",
+  "react-dom",
+  "react-dom/client",
+  "lucide-react",
+  "react-router-dom",
+  "react-router",
+  "framer-motion",
+  "motion",
+  "motion/react",
+  "clsx",
+  "classnames",
+  "tailwind-merge",
+]);
 
 const CODE_RE = /\.(jsx?|tsx?|mjs|cjs)$/;
 const STYLE_RE = /\.(css|scss|sass|less)$/;

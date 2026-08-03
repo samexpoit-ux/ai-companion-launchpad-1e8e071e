@@ -415,7 +415,9 @@ export function PreviewPanel() {
             />
           ) : null}
 
-          {buildError && !pendingPatch && (
+          {buildError &&
+            !pendingPatch &&
+            (!autoFixEnabled || fixStatus === "failed" || fixStatus === "exhausted") && (
             <Suspense fallback={null}>
               <ErrorOverlay onReload={() => setReloadKey((k) => k + 1)} />
             </Suspense>
@@ -524,12 +526,12 @@ function AutoFixBar({
           {status === "fixing" && `Auto-fixing… attempt ${attempts} of ${MAX_FIX_ATTEMPTS}`}
           {status === "review" && `Patch ready for review — attempt ${attempts}`}
           {status === "detected" &&
-            `${errors.length} runtime error${errors.length > 1 ? "s" : ""} captured`}
+            `Preview check found ${errors.length} issue${errors.length > 1 ? "s" : ""} · repairing in the background`}
           {status === "fixed" && (last?.summary ?? "Patch applied")}
           {status === "failed" && (error ?? "Auto-fix failed")}
           {status === "exhausted" && `Still failing after ${MAX_FIX_ATTEMPTS} AI attempts`}
         </div>
-        {errors.length > 0 && (
+        {errors.length > 0 && (status === "failed" || status === "exhausted") && (
           <pre className="mt-1 max-h-16 overflow-auto whitespace-pre-wrap break-words font-mono text-2xs opacity-80">
             {errors.slice(-2).join("\n")}
           </pre>

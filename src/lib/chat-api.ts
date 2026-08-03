@@ -1,5 +1,6 @@
 import { readApiError, type ApiError } from "./api-error";
 import { apiFetch } from "./api-fetch";
+import type { ChatAttachment } from "./chat-attachments";
 // Real AI backend. Server route: /api/chat keeps provider calls server-side.
 
 export type ChatRole = "user" | "assistant";
@@ -89,7 +90,7 @@ export const AI_MODELS: AIModel[] = [
 export async function sendChatMessage(
   messages: ChatMessage[],
   modelId?: string,
-  options?: { plan?: string; mode?: string; threadId?: string },
+  options?: { plan?: string; mode?: string; threadId?: string; attachments?: ChatAttachment[] },
 ): Promise<{
   content: string;
   model: string;
@@ -115,6 +116,7 @@ export async function sendChatMessage(
     plan: options?.plan,
     mode: options?.mode,
     threadId: options?.threadId,
+    attachments: options?.attachments,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   };
 
