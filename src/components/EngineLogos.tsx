@@ -68,7 +68,7 @@ const KatMark = ({ className }: MarkProps) => (
   </svg>
 );
 
-const MARKS: Record<EngineId, (p: MarkProps) => JSX.Element> = {
+const MARKS: Record<EngineId, (p: MarkProps) => React.ReactElement> = {
   openai: OpenAIMark,
   claude: ClaudeMark,
   gemini: GeminiMark,
