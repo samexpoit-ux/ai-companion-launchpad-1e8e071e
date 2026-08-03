@@ -670,7 +670,7 @@ function ChatWorkspaceInner() {
         setIsSending(false);
       }
     },
-    [modelId, updateThread, mode, credits, isMobile, openWorkspace, openProject],
+    [modelId, updateThread, mode, credits, isMobile, openWorkspace, openProject, setFixIntent],
   );
 
   const handleSend = async () => {
