@@ -309,6 +309,11 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const versionsRef = useRef<PatchVersion[]>([]);
   versionsRef.current = versions;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Fingerprint of the error batch the last patch tried to fix. */
+  const lastSignatureRef = useRef<string>("");
+  /** Short rolling log of what previous attempts tried, sent to the fixer. */
+  const historyRef = useRef<Array<{ attempt: number; summary: string; ok: boolean }>>([]);
+
 
   const resetFixState = useCallback(() => {
     setRuntimeErrors([]);
