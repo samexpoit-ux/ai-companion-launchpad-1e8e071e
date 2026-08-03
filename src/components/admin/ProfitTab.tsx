@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { DollarSign, Percent, RefreshCw, TrendingUp, Wallet } from "lucide-react";
+import {
+  BadgePercent,
+  Coins,
+  Cpu,
+  DollarSign,
+  Layers,
+  Percent,
+  RefreshCw,
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchUsageReport, type UsageReport } from "@/lib/admin-api";
 import { formatUsd } from "@/lib/credit-ledger";
 import { formatCredits } from "@/lib/credits";
 import { DEFAULT_PRICE_PER_CREDIT, profitSummary, type ProfitRow } from "@/lib/profit";
+import { EmptyState, Panel, Pill, SectionHeading, StatCard, StatSkeleton } from "@/components/admin/ui";
 
 const RANGES = [
   { days: 1, label: "24h" },
@@ -19,6 +31,8 @@ const EMPTY: UsageReport = {
   requests: [],
   totals: { requests: 0, credits: 0, tokens: 0, costUsd: 0 },
 };
+
+const shortModel = (value: string) => value.split("/").pop() ?? value;
 
 /**
  * Admin-only margin view: what credits were sold for, what the upstream calls
@@ -42,226 +56,302 @@ export function ProfitTab() {
 
   const perCredit = Number(price) > 0 ? Number(price) : DEFAULT_PRICE_PER_CREDIT;
   const summary = useMemo(() => profitSummary(report, perCredit), [report, perCredit]);
+
   const healthy = summary.multiple >= 3;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Profit range">
+    <div className="space-y-5">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-1.5 rounded-full border border-ink-200 bg-white p-1 shadow-ds-xs" role="group" aria-label="Profit range">
           {RANGES.map((r) => (
             <button
               key={r.days}
               type="button"
               onClick={() => setDays(r.days)}
               aria-pressed={days === r.days}
-              className={`rounded-full border px-3 py-1.5 text-xs transition ${
+              className={`rounded-full px-3 py-1.5 text-xs transition ${
                 days === r.days
-                  ? "border-[color:var(--color-iris)] bg-[color:var(--color-iris)]/10 font-medium text-ink-900"
-                  : "border-ink-200 bg-white text-ink-600 hover:bg-ink-100"
+                  ? "bg-[color:var(--color-iris)] font-semibold text-[color:var(--color-iris-fg)] shadow-ds-xs"
+                  : "text-ink-600 hover:bg-ink-100"
               }`}
             >
               {r.label}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-2">
-          <label htmlFor="price-per-credit" className="text-xs text-ink-600">
-            Sell price / credit (USD)
-          </label>
+
+        <label className="flex items-center gap-2 text-xs text-ink-500">
+          Sell price / credit
           <Input
-            id="price-per-credit"
             value={price}
-            inputMode="decimal"
             onChange={(e) => setPrice(e.target.value)}
-            className="h-9 w-24 text-sm"
+            inputMode="decimal"
+            className="h-9 w-24 font-mono text-sm"
+            aria-label="Sell price per credit in USD"
           />
-          <Button variant="outline" size="sm" onClick={() => void load(days)} disabled={loading}>
-            <RefreshCw
-              className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
-              aria-hidden
-            />
-            Refresh
-          </Button>
-        </div>
+        </label>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto"
+          onClick={() => void load(days)}
+          disabled={loading}
+        >
+          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
+          Refresh
+        </Button>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          icon={<Wallet className="h-4 w-4" aria-hidden />}
-          label="Credit revenue"
-          value={formatUsd(summary.revenueUsd)}
-          hint={`${formatCredits(summary.credits)} credits · ${summary.requests} billed requests`}
-        />
-        <Stat
-          icon={<DollarSign className="h-4 w-4" aria-hidden />}
-          label="Upstream cost"
-          value={formatUsd(summary.costUsd)}
-          hint={`${formatUsd(summary.costPerCredit)} per credit`}
-        />
-        <Stat
-          icon={<TrendingUp className="h-4 w-4" aria-hidden />}
-          label="Gross profit"
-          value={formatUsd(summary.profitUsd)}
-          hint={`${summary.multiple}× upstream cost`}
-          tone={summary.profitUsd >= 0 ? "good" : "bad"}
-        />
-        <Stat
-          icon={<Percent className="h-4 w-4" aria-hidden />}
-          label="Margin"
-          value={`${summary.marginPct}%`}
-          hint={`safe price ≥ ${formatUsd(summary.breakEvenPrice)} / credit`}
-          tone={healthy ? "good" : "bad"}
-        />
-      </div>
-
-      <p
-        role="status"
-        className={`rounded-xl border px-4 py-3 text-xs leading-relaxed ${
-          healthy
-            ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-            : "border-amber-200 bg-amber-50 text-amber-900"
-        }`}
+      {/* Hero margin strip */}
+      <section
+        className="relative overflow-hidden rounded-3xl p-5 text-[color:var(--color-iris-fg)] shadow-ds-lg sm:p-6"
+        style={{ background: "var(--admin-gradient)" }}
       >
-        {healthy
-          ? `Pricing recovers ${summary.multiple}× upstream spend — margin is safe at ${formatUsd(perCredit)} per credit.`
-          : `At ${formatUsd(perCredit)} per credit you only recover ${summary.multiple}× upstream spend. Raise the price to at least ${formatUsd(summary.breakEvenPrice)} per credit, or route more traffic to the cheap tier.`}
-      </p>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full opacity-40 blur-3xl"
+          style={{ background: "var(--premium-gradient)" }}
+        />
+        <div className="relative flex flex-wrap items-start gap-4">
+          <div className="min-w-0">
+            <p className="text-2xs font-semibold uppercase tracking-wider text-white/55">
+              Gross profit · last {days === 1 ? "24h" : `${days} days`}
+            </p>
+            <p className="mt-1 font-display text-4xl font-semibold tracking-tight">
+              {formatUsd(summary.profitUsd)}
+            </p>
+            <p className="mt-1.5 text-xs text-white/60">
+              {formatUsd(summary.revenueUsd)} sold · {formatUsd(summary.costUsd)} engine cost ·{" "}
+              {formatCredits(summary.credits)} credits over {summary.requests} billed requests
+            </p>
+          </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Profit by action" rows={summary.byAction} loading={loading} />
-        <Panel title="Cost by engine" rows={summary.byModel} loading={loading} mono />
+          <div className="ml-auto flex flex-wrap gap-2">
+            <HeroChip label="Margin" value={`${summary.marginPct}%`} />
+            <HeroChip label="Cost multiple" value={`${summary.multiple}×`} tone={healthy ? "good" : "warn"} />
+            <HeroChip label="Cost / credit" value={formatUsd(summary.costPerCredit)} />
+          </div>
+        </div>
+
+        <div className="relative mt-5">
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-white/15">
+            <div
+              className="h-full"
+              style={{
+                width: `${Math.max(2, Math.min(100, (summary.costUsd / Math.max(summary.revenueUsd, 1e-9)) * 100))}%`,
+                background: "var(--color-flare)",
+              }}
+            />
+            <div className="h-full flex-1" style={{ background: "var(--color-mint)" }} />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-4 text-2xs text-white/60">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: "var(--color-flare)" }} />
+              Engine cost
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: "var(--color-mint)" }} />
+              Retained margin
+            </span>
+            <span className="ml-auto">
+              Safe floor at 3× cost: {formatUsd(summary.breakEvenPrice)} / credit
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* Metric grid */}
+      {loading ? (
+        <StatSkeleton count={4} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Revenue"
+            value={formatUsd(summary.revenueUsd)}
+            icon={Wallet}
+            accent="var(--color-iris)"
+            hint={`At ${formatUsd(perCredit)} per credit`}
+          />
+          <StatCard
+            label="Engine cost"
+            value={formatUsd(summary.costUsd)}
+            icon={DollarSign}
+            accent="var(--color-flare)"
+            progress={summary.revenueUsd > 0 ? summary.costUsd / summary.revenueUsd : 0}
+            hint={`${formatUsd(summary.costPerCredit)} average per credit`}
+          />
+          <StatCard
+            label="Margin"
+            value={`${summary.marginPct}%`}
+            icon={Percent}
+            accent="var(--color-mint)"
+            progress={Math.max(0, summary.marginPct / 100)}
+            delta={healthy ? `${summary.multiple}× safe` : `${summary.multiple}× tight`}
+            hint={healthy ? "Comfortably above the 3× floor" : "Below the 3× safety multiple"}
+          />
+          <StatCard
+            label="Credits sold"
+            value={formatCredits(summary.credits)}
+            icon={Coins}
+            accent="var(--color-orchid)"
+            hint={`${summary.requests} billed requests`}
+          />
+        </div>
+      )}
+
+      {/* Breakdowns */}
+      <SectionHeading
+        title="Where the margin comes from"
+        hint="Revenue, engine cost and retained profit per action, engine and customer."
+      />
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ProfitPanel
+          title="By action"
+          description="Which product surfaces earn the most"
+          icon={Layers}
+          accent="var(--color-iris)"
+          rows={summary.byAction}
+          loading={loading}
+        />
+        <ProfitPanel
+          title="By engine"
+          description="Upstream model spend (admin-only)"
+          icon={Cpu}
+          accent="var(--color-orchid)"
+          rows={summary.byModel.map((r) => ({ ...r, label: shortModel(r.label), sub: r.key }))}
+          loading={loading}
+        />
       </div>
 
-      <Panel title="Profit by customer" rows={summary.byUser} loading={loading} />
+      <ProfitPanel
+        title="Top customers by margin"
+        description="Highest revenue accounts in this window"
+        icon={Users}
+        accent="var(--color-mint)"
+        rows={summary.byUser}
+        loading={loading}
+        showRank
+      />
     </div>
   );
 }
 
-function Panel({
-  title,
-  rows,
-  loading,
-  mono = false,
+function HeroChip({
+  label,
+  value,
+  tone = "neutral",
 }: {
-  title: string;
-  rows: ProfitRow[];
-  loading: boolean;
-  mono?: boolean;
+  label: string;
+  value: string;
+  tone?: "neutral" | "good" | "warn";
 }) {
+  const ring =
+    tone === "good"
+      ? "ring-[color:var(--color-mint)]/50"
+      : tone === "warn"
+        ? "ring-[color:var(--color-sun)]/60"
+        : "ring-white/20";
   return (
-    <section className="rounded-xl border border-ink-200 bg-white">
-      <header className="border-b border-ink-200 px-4 py-3">
-        <h2 className="text-sm font-medium text-ink-900">{title}</h2>
-      </header>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[34rem] text-sm">
-          <thead className="bg-ink-100/70 text-left text-xs uppercase tracking-wide text-ink-500">
-            <tr>
-              <th scope="col" className="px-4 py-2 font-medium">
-                Item
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
-                Reqs
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
-                Credits
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
-                Revenue
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
-                Cost
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
-                Profit
-              </th>
-              <th scope="col" className="px-4 py-2 text-right font-medium">
-                Margin
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-ink-200">
-            {loading && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-sm text-ink-500">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-sm text-ink-500">
-                  No billed usage in this range.
-                </td>
-              </tr>
-            )}
-            {rows.map((row) => (
-              <tr key={row.key}>
-                <td
-                  className={`max-w-[14rem] truncate px-4 py-2.5 text-ink-900 ${
-                    mono ? "font-mono text-xs" : ""
-                  }`}
-                >
-                  {row.label}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs text-ink-600">
-                  {row.requests}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs text-ink-600">
-                  {formatCredits(row.credits)}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs text-ink-600">
-                  {formatUsd(row.revenueUsd)}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs text-ink-600">
-                  {formatUsd(row.costUsd)}
-                </td>
-                <td
-                  className={`px-4 py-2.5 text-right font-mono text-xs ${
-                    row.profitUsd >= 0 ? "text-emerald-600" : "text-red-600"
-                  }`}
-                >
-                  {formatUsd(row.profitUsd)}
-                </td>
-                <td className="px-4 py-2.5 text-right font-mono text-xs text-ink-600">
-                  {row.marginPct}%
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <div className={`rounded-2xl bg-white/10 px-3.5 py-2 ring-1 ring-inset ${ring}`}>
+      <p className="text-2xs font-semibold uppercase tracking-wider text-white/55">{label}</p>
+      <p className="mt-0.5 font-display text-lg font-semibold leading-none tracking-tight">{value}</p>
+    </div>
   );
 }
 
-function Stat({
+function ProfitPanel({
+  title,
+  description,
   icon,
-  label,
-  value,
-  hint,
-  tone,
+  accent,
+  rows,
+  loading,
+  showRank = false,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "good" | "bad";
+  title: string;
+  description: string;
+  icon: typeof TrendingUp;
+  accent: string;
+  rows: ProfitRow[];
+  loading: boolean;
+  showRank?: boolean;
 }) {
+  const max = Math.max(...rows.map((r) => r.revenueUsd), 0.000001);
+
   return (
-    <div className="rounded-xl border border-ink-200 bg-white p-4">
-      <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-ink-500">
-        {icon}
-        {label}
-      </div>
-      <p
-        className={`mt-1.5 font-display text-xl font-semibold tracking-tight ${
-          tone === "bad" ? "text-red-600" : tone === "good" ? "text-emerald-600" : "text-ink-900"
-        }`}
-      >
-        {value}
-      </p>
-      {hint && <p className="mt-0.5 text-2xs text-ink-500">{hint}</p>}
+    <Panel title={title} description={description} icon={icon} accent={accent} bodyClassName="p-0">
+      {loading ? (
+        <div className="space-y-2 p-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-14 animate-pulse rounded-2xl bg-ink-100" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="p-4">
+          <EmptyState
+            icon={BadgePercent}
+            title="No billable activity yet"
+            description="Once customers run builds in this window, revenue and margin appear here."
+          />
+        </div>
+      ) : (
+        <ul className="divide-y divide-ink-200/70">
+          {rows.map((row, index) => (
+            <li key={row.key} className="px-4 py-3 transition hover:bg-ink-100/60">
+              <div className="flex items-baseline gap-2">
+                {showRank && (
+                  <span className="w-5 shrink-0 font-mono text-2xs text-ink-400">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-ink-900">{row.label}</p>
+                  {row.sub && (
+                    <p className="truncate font-mono text-2xs text-ink-500">{row.sub}</p>
+                  )}
+                </div>
+                <div className="ml-auto flex shrink-0 items-baseline gap-2">
+                  <span className="font-mono text-sm font-semibold text-ink-900">
+                    {formatUsd(row.profitUsd)}
+                  </span>
+                  <Pill tone={row.marginPct >= 66 ? "good" : row.marginPct >= 33 ? "warn" : "bad"}>
+                    {row.marginPct}%
+                  </Pill>
+                </div>
+              </div>
+
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-200/70">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${Math.max(2, (row.revenueUsd / max) * 100)}%`,
+                    background: `linear-gradient(90deg, ${accent}, var(--color-iris-cyan))`,
+                  }}
+                />
+              </div>
+
+              <dl className="mt-2 grid grid-cols-4 gap-2 text-2xs text-ink-500">
+                <Metric label="revenue" value={formatUsd(row.revenueUsd)} />
+                <Metric label="cost" value={formatUsd(row.costUsd)} />
+                <Metric label="credits" value={formatCredits(row.credits)} />
+                <Metric label="requests" value={String(row.requests)} />
+              </dl>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="uppercase tracking-wider">{label}</dt>
+      <dd className="font-mono text-xs text-ink-900">{value}</dd>
     </div>
   );
 }
