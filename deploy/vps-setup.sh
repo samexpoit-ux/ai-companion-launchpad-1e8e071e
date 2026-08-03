@@ -12,7 +12,7 @@ set -euo pipefail
 DOMAIN="nexuraai.dev"
 APP_DIR="/var/www/nexuraai"
 APP_USER="nexuraai"
-REPO="https://github.com/samexpoit-ux/ai-companion-launchpad.git"
+REPO="https://github.com/samexpoit-ux/ai-companion-launchpad-1e8e071e.git"
 PORT="3000"
 
 echo "==> 1/8 System update + base packages"
