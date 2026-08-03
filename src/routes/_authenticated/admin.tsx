@@ -274,32 +274,39 @@ function AdminPage() {
       )}
 
       <div className="min-w-0 flex-1">
-        <header className="sticky top-0 z-30 border-b border-ink-200 bg-ink-50/85 backdrop-blur">
+        <header className="sticky top-0 z-30 border-b border-ink-200/80 bg-white/75 backdrop-blur-xl">
           <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
             <button
               type="button"
               onClick={() => setNavOpen(true)}
               aria-label="Open admin menu"
-              className="rounded-xl border border-ink-200 bg-white p-2 text-ink-600 lg:hidden"
+              className="rounded-xl border border-ink-200 bg-white p-2 text-ink-600 shadow-ds-xs transition hover:border-ink-300 hover:text-ink-900 lg:hidden"
             >
               <Menu className="h-4 w-4" aria-hidden />
             </button>
+            <span
+              className="hidden h-10 w-10 shrink-0 place-items-center rounded-2xl text-[color:var(--color-iris-fg)] shadow-ds-xs sm:grid"
+              style={{ background: `linear-gradient(135deg, ${active.accent}, var(--color-iris-deep))` }}
+            >
+              <active.icon className="h-4.5 w-4.5" aria-hidden />
+            </span>
             <div className="min-w-0">
               <p className="text-2xs font-semibold uppercase tracking-wider text-ink-500">
-                Admin console
+                Admin console · {active.hint}
               </p>
               <h1 className="truncate font-display text-lg font-semibold tracking-tight text-ink-900">
                 {active.label}
               </h1>
             </div>
             <span
-              className="ml-auto hidden shrink-0 rounded-full px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] sm:block"
+              className="ml-auto hidden shrink-0 rounded-full px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] shadow-ds-xs sm:block"
               style={{ background: "var(--premium-gradient)" }}
             >
               Premium controls
             </span>
           </div>
         </header>
+
 
         <section
           aria-label={active.label}
