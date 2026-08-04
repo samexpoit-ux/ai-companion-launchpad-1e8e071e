@@ -44,6 +44,242 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_actions: {
+        Row: {
+          attempt: number
+          created_at: string
+          detail: Json
+          duration_ms: number | null
+          id: string
+          kind: string
+          label: string
+          ok: boolean
+          seq: number
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          attempt?: number
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          kind: string
+          label: string
+          ok?: boolean
+          seq: number
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          attempt?: number
+          created_at?: string
+          detail?: Json
+          duration_ms?: number | null
+          id?: string
+          kind?: string
+          label?: string
+          ok?: boolean
+          seq?: number
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_actions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_credential_secrets: {
+        Row: {
+          ciphertext: string
+          credential_id: string
+          iv: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ciphertext: string
+          credential_id: string
+          iv: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ciphertext?: string
+          credential_id?: string
+          iv?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_credential_secrets_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: true
+            referencedRelation: "agent_credentials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_credentials: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          last_used_at: string | null
+          login_url: string | null
+          origin: string
+          updated_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          last_used_at?: string | null
+          login_url?: string | null
+          origin: string
+          updated_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          last_used_at?: string | null
+          login_url?: string | null
+          origin?: string
+          updated_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      agent_screenshots: {
+        Row: {
+          attempt: number
+          caption: string | null
+          created_at: string
+          data_url: string
+          id: string
+          kind: string
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          attempt?: number
+          caption?: string | null
+          created_at?: string
+          data_url: string
+          id?: string
+          kind?: string
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          attempt?: number
+          caption?: string | null
+          created_at?: string
+          data_url?: string
+          id?: string
+          kind?: string
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_screenshots_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "agent_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_sessions: {
+        Row: {
+          approval_note: string | null
+          approved_at: string | null
+          attempt: number
+          created_at: string
+          credential_id: string | null
+          credits_charged: number
+          duration_ms: number | null
+          error: string | null
+          finished_at: string | null
+          goal: string
+          id: string
+          max_attempts: number
+          skip_reason: string | null
+          started_at: string | null
+          status: string
+          summary: string | null
+          target_url: string
+          task: string
+          timeout_ms: number
+          user_id: string
+        }
+        Insert: {
+          approval_note?: string | null
+          approved_at?: string | null
+          attempt?: number
+          created_at?: string
+          credential_id?: string | null
+          credits_charged?: number
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          goal?: string
+          id?: string
+          max_attempts?: number
+          skip_reason?: string | null
+          started_at?: string | null
+          status?: string
+          summary?: string | null
+          target_url: string
+          task?: string
+          timeout_ms?: number
+          user_id: string
+        }
+        Update: {
+          approval_note?: string | null
+          approved_at?: string | null
+          attempt?: number
+          created_at?: string
+          credential_id?: string | null
+          credits_charged?: number
+          duration_ms?: number | null
+          error?: string | null
+          finished_at?: string | null
+          goal?: string
+          id?: string
+          max_attempts?: number
+          skip_reason?: string | null
+          started_at?: string | null
+          status?: string
+          summary?: string | null
+          target_url?: string
+          task?: string
+          timeout_ms?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_sessions_credential_id_fkey"
+            columns: ["credential_id"]
+            isOneToOne: false
+            referencedRelation: "agent_credentials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
           client_id: string | null
