@@ -323,7 +323,11 @@ export const Route = createFileRoute("/api/autofix")({
             errorMessage: e.message,
             latencyMs: Date.now() - started,
           });
-          return apiErrorResponse(codeFromUpstream(e.status), "autofix", e.message, { traceId });
+          return apiErrorResponse(codeFromUpstream(e.status), "autofix", e.message, {
+            traceId,
+            ...(err instanceof FreePoolError ? { retryAfterSec: err.retryAfterSec } : {}),
+          });
+
         }
       },
     },
