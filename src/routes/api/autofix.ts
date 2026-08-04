@@ -199,7 +199,9 @@ export const Route = createFileRoute("/api/autofix")({
             messages,
             (a) => attempts.push(a),
             request.signal,
+            poolKey(request),
           );
+
           const finalCharge = await finalizeRequestCost(request, charge.id, "autofix", {
             costUsd: result.costUsd,
             inputTokens: result.inputTokens,
