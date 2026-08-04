@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Percent, Plus, Trash2, Users } from "lucide-react";
+import { AlertTriangle, Percent, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,25 +12,33 @@ import {
   saveCoupon,
   type CouponRedemptionRow,
 } from "@/lib/admin-api";
-import { PAID_PLANS, planById } from "@/lib/plans";
+import { PAID_PLANS, planById, resellerPriceBdt } from "@/lib/plans";
+import { useCurrency } from "@/components/admin/currency";
+import { bdtToUsd, formatBdt, usdToBdt } from "@/lib/currency";
+import { DEFAULT_ECONOMICS } from "@/lib/package-economics";
 import {
   couponStatus,
   describeCoupon,
   emptyCouponDraft,
   normalizeCouponCode,
+  priceFloor,
   quoteCoupon,
   type Coupon,
   type CouponDraft,
   type CouponKind,
 } from "@/lib/resellers";
 
-const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
-
 const KINDS: { id: CouponKind; label: string; hint: string }[] = [
-  { id: "percent", label: "% discount", hint: "value = percent off" },
-  { id: "amount", label: "Amount off", hint: "value = USD off" },
-  { id: "fixed_price", label: "Reseller price", hint: "value = final USD price" },
+  { id: "fixed_price", label: "Flat wholesale price", hint: "value = what the reseller pays" },
+  { id: "percent", label: "% discount", hint: "value = percent off list" },
+  { id: "amount", label: "Amount off", hint: "value = money off list" },
 ];
+
+const FLOOR_STYLE: Record<string, string> = {
+  loss: "border-[color:var(--color-flare)] bg-[color:var(--color-flare)]/10 text-[color:var(--color-flare)]",
+  thin: "border-[color:var(--color-sun)] bg-[color:var(--color-sun)]/10 text-ink-800",
+  safe: "border-[color:var(--color-mint)] bg-[color:var(--color-mint)]/10 text-ink-800",
+};
 
 const STATUS_STYLE: Record<string, string> = {
   active: "border-[color:var(--color-mint)] text-[color:var(--color-mint)]",
@@ -46,6 +54,10 @@ export function ResellersTab() {
   const [draft, setDraft] = useState<CouponDraft>(emptyCouponDraft());
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const { money, currency } = useCurrency();
+  const [costPerCredit, setCostPerCredit] = useState(String(DEFAULT_ECONOMICS.costPerCredit));
+  const usd = (cents: number) => money(cents / 100);
+  const cost = Number(costPerCredit) > 0 ? Number(costPerCredit) : DEFAULT_ECONOMICS.costPerCredit;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -115,7 +127,9 @@ export function ResellersTab() {
     };
   }, [redemptions, rows]);
 
-  const draftQuote = quoteCoupon(draft, draft.planSlug ?? PAID_PLANS[0].id);
+  const draftPlan = draft.planSlug ?? PAID_PLANS[0].id;
+  const draftQuote = quoteCoupon(draft, draftPlan);
+  const draftFloor = priceFloor(draftPlan, cost, draftQuote.payableUsd);
 
   if (loading) return <p className="text-sm text-ink-500">Loading reseller programme…</p>;
 
@@ -135,6 +149,80 @@ export function ResellersTab() {
           </div>
         ))}
       </div>
+
+      {/* ------------------------------------------- wholesale price list */}
+      <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="font-display text-sm font-bold text-ink-900">
+              Reseller wholesale price list
+            </h3>
+            <p className="text-xs text-ink-500">
+              Flat low price per package, no commission — resellers keep whatever they charge their
+              own customers. Prices below the cost floor are flagged.
+            </p>
+          </div>
+          <label className="block text-xs text-ink-600">
+            Engine cost / credit (USD)
+            <Input
+              value={costPerCredit}
+              onChange={(e) => setCostPerCredit(e.target.value)}
+              inputMode="decimal"
+              className="mt-1 h-9 w-28 font-mono text-sm"
+            />
+          </label>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-xs">
+            <thead className="text-2xs uppercase tracking-wider text-ink-500">
+              <tr>
+                <th className="px-3 py-2">Package</th>
+                <th className="px-3 py-2">Retail</th>
+                <th className="px-3 py-2">Reseller pays</th>
+                <th className="px-3 py-2">Our engine cost</th>
+                <th className="px-3 py-2">We keep</th>
+                <th className="px-3 py-2">Cost floor (never below)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-200/70">
+              {PAID_PLANS.map((plan) => {
+                const wholesaleBdt = resellerPriceBdt(plan.id);
+                const wholesaleUsd = bdtToUsd(wholesaleBdt);
+                const floor = priceFloor(plan.id, cost, wholesaleUsd);
+                return (
+                  <tr key={plan.id} className="text-ink-800">
+                    <td className="px-3 py-2">
+                      <span className="font-semibold text-ink-900">{plan.name}</span>
+                      <span className="ml-1.5 text-ink-500">{plan.credits} cr</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono">{money(Number(plan.price.slice(1)))}</td>
+                    <td className="px-3 py-2 font-mono font-semibold">
+                      {formatBdt(wholesaleBdt)}
+                      <span className="ml-1 text-ink-500">${wholesaleUsd.toFixed(2)}</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono">
+                      {formatBdt(floor.breakEvenBdt)}
+                      <span className="ml-1 text-ink-500">{money(floor.breakEvenUsd)}</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono">
+                      {formatBdt(wholesaleBdt - floor.breakEvenBdt)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-2xs font-semibold ${FLOOR_STYLE[floor.verdict]}`}
+                      >
+                        {floor.verdict === "loss"
+                          ? `Loss — min ${formatBdt(floor.breakEvenBdt)}`
+                          : `${floor.multiple}× cost · safe ${formatBdt(floor.safeBdt)}`}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {/* -------------------------------------------------- create a coupon */}
       <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
@@ -164,15 +252,31 @@ export function ResellersTab() {
             </select>
           </label>
           <label className="block text-xs text-ink-600">
-            Value ({draft.kind === "percent" ? "%" : "USD"})
+            {draft.kind === "percent"
+              ? "Value (%)"
+              : `Reseller pays (${currency === "BDT" ? "৳ BDT" : "$ USD"})`}
             <Input
               type="number"
               min={0}
               step="0.01"
-              value={draft.value}
-              onChange={(e) => setDraft({ ...draft, value: Number(e.target.value || "0") })}
+              value={
+                draft.kind === "percent" || currency === "USD" ? draft.value : usdToBdt(draft.value)
+              }
+              onChange={(e) => {
+                const raw = Number(e.target.value || "0");
+                const next = draft.kind === "percent" || currency === "USD" ? raw : bdtToUsd(raw);
+                setDraft({ ...draft, value: next });
+              }}
               className="mt-1"
             />
+            {draft.kind !== "percent" && (
+              <span className="mt-1 block text-2xs text-ink-500">
+                {currency === "BDT"
+                  ? `= $${draft.value.toFixed(2)} USD`
+                  : `= ${formatBdt(usdToBdt(draft.value))}`}{" "}
+                · suggested {formatBdt(resellerPriceBdt(draftPlan))}
+              </span>
+            )}
           </label>
           <label className="block text-xs text-ink-600">
             Package
@@ -207,7 +311,7 @@ export function ResellersTab() {
             />
           </label>
           <label className="block text-xs text-ink-600">
-            Commission %
+            Commission % (0 = reseller keeps all upside)
             <Input
               type="number"
               min={0}
@@ -267,16 +371,38 @@ export function ResellersTab() {
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-50/70 px-3 py-2 text-xs text-ink-600">
-          <span>
-            Reseller pays <strong className="text-ink-900">${draftQuote.payableUsd.toFixed(2)}</strong>{" "}
-            (list ${draftQuote.listUsd.toFixed(2)}) for {draftQuote.credits} credits · commission $
-            {draftQuote.commissionUsd.toFixed(2)} · net ${draftQuote.netUsd.toFixed(2)}
-          </span>
-          <Button size="sm" disabled={busy === "new" || !draft.code} onClick={() => void create()}>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            {busy === "new" ? "Creating…" : "Create coupon"}
-          </Button>
+        <div
+          className={`space-y-2 rounded-xl border px-3 py-2.5 text-xs ${FLOOR_STYLE[draftFloor.verdict]}`}
+        >
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {draftFloor.verdict === "safe" ? (
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            ) : (
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            )}
+            <span>
+              Reseller pays <strong>{money(draftQuote.payableUsd)}</strong> (list{" "}
+              {money(draftQuote.listUsd)}) for {draftQuote.credits} credits · commission{" "}
+              {money(draftQuote.commissionUsd)} · net to us{" "}
+              <strong>{money(draftQuote.netUsd)}</strong>
+            </span>
+            <Button
+              size="sm"
+              className="ml-auto"
+              disabled={busy === "new" || !draft.code}
+              onClick={() => void create()}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              {busy === "new" ? "Creating…" : "Create coupon"}
+            </Button>
+          </div>
+          <p className="text-2xs">
+            {draftFloor.verdict === "loss"
+              ? `LOSS — our engine cost for ${draftFloor.credits} credits is ${money(draftFloor.breakEvenUsd)} (${formatBdt(draftFloor.breakEvenBdt)}). Never sell under this.`
+              : draftFloor.verdict === "thin"
+                ? `Thin — covers cost (${money(draftFloor.breakEvenUsd)} / ${formatBdt(draftFloor.breakEvenBdt)}) at ${draftFloor.multiple}×, but the safe floor is ${money(draftFloor.safeUsd)} (${formatBdt(draftFloor.safeBdt)}).`
+                : `Safe — ${draftFloor.multiple}× our ${money(draftFloor.breakEvenUsd)} (${formatBdt(draftFloor.breakEvenBdt)}) engine cost for ${draftFloor.credits} credits.`}
+          </p>
         </div>
       </section>
 
@@ -365,7 +491,21 @@ export function ResellersTab() {
                     Active
                   </label>
                   <span>
-                    ${quote.payableUsd.toFixed(2)} → {quote.credits} credits
+                    {money(quote.payableUsd)} → {quote.credits} credits ·{" "}
+                    {(() => {
+                      const floor = priceFloor(
+                        coupon.planSlug ?? PAID_PLANS[0].id,
+                        cost,
+                        quote.payableUsd,
+                      );
+                      return floor.verdict === "loss" ? (
+                        <strong className="text-[color:var(--color-flare)]">
+                          below cost {money(floor.breakEvenUsd)}
+                        </strong>
+                      ) : (
+                        <span className="text-ink-500">{floor.multiple}× cost</span>
+                      );
+                    })()}
                   </span>
                   <div className="flex gap-2">
                     <Button

@@ -13,7 +13,8 @@
 import { PLANS, planPriceUsd, type PlanId } from "@/lib/plans";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const pct = (part: number, whole: number) => (whole <= 0 ? 0 : Math.round((part / whole) * 1000) / 10);
+const pct = (part: number, whole: number) =>
+  whole <= 0 ? 0 : Math.round((part / whole) * 1000) / 10;
 
 export interface EconomicsInput {
   /** Real upstream USD cost of one credit (from the ledger). */
@@ -30,8 +31,10 @@ export interface EconomicsInput {
 
 export const DEFAULT_ECONOMICS: EconomicsInput = {
   costPerCredit: 0.012,
+  // Resellers buy a flat low wholesale price and keep 100% of their own margin,
+  // so we pay no commission (0%). The discount is the wholesale gap.
   resellerDiscountPct: 20,
-  commissionPct: 10,
+  commissionPct: 0,
   monthlyFixedUsd: 120,
   utilisation: 0.85,
 };

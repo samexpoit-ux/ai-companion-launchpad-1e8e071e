@@ -9,7 +9,8 @@
  * Redemption limits, expiry and the active flag are enforced in the database
  * (`redeem_coupon`), never in the browser.
  */
-import { planById, planPriceUsd } from "./plans";
+import { planById, planPriceUsd, resellerPriceBdt } from "./plans";
+import { bdtToUsd, usdToBdt } from "./currency";
 
 export type CouponKind = "percent" | "amount" | "fixed_price";
 
@@ -43,17 +44,55 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 export function emptyCouponDraft(): CouponDraft {
   return {
     code: "",
-    kind: "percent",
-    value: 20,
+    // Resellers buy at a flat wholesale price and keep their own margin, so a
+    // fixed price with 0% commission is the default deal.
+    kind: "fixed_price",
+    value: bdtToUsd(resellerPriceBdt("starter")),
     planSlug: null,
     bonusCredits: 0,
     resellerEmail: null,
     resellerName: null,
-    commissionPct: 10,
+    commissionPct: 0,
     maxRedemptions: null,
     expiresAt: null,
     isActive: true,
     note: null,
+  };
+}
+
+/**
+ * Cost floor for a manual reseller price.
+ *
+ * `costPerCredit` is the measured upstream USD cost of one credit. Selling below
+ * `breakEvenUsd` is a straight loss; below `safeUsd` (3× cost) the package stops
+ * covering fixed spend, so the reseller tab flags it before it is saved.
+ */
+export interface PriceFloor {
+  credits: number;
+  breakEvenUsd: number;
+  safeUsd: number;
+  breakEvenBdt: number;
+  safeBdt: number;
+  /** "loss" | "thin" | "safe" for the price being entered. */
+  verdict: "loss" | "thin" | "safe";
+  multiple: number;
+}
+
+export function priceFloor(planId: string, costPerCredit: number, payableUsd: number): PriceFloor {
+  const credits = planById(planId).credits;
+  const cost = Math.max(0, Number(costPerCredit) || 0);
+  const breakEvenUsd = round2(credits * cost);
+  const safeUsd = round2(breakEvenUsd * 3);
+  const multiple =
+    breakEvenUsd > 0 ? Math.round((payableUsd / breakEvenUsd) * 100) / 100 : Infinity;
+  return {
+    credits,
+    breakEvenUsd,
+    safeUsd,
+    breakEvenBdt: usdToBdt(breakEvenUsd),
+    safeBdt: usdToBdt(safeUsd),
+    verdict: payableUsd < breakEvenUsd ? "loss" : payableUsd < safeUsd ? "thin" : "safe",
+    multiple,
   };
 }
 
@@ -72,7 +111,10 @@ export interface CouponQuote {
 }
 
 /** What a reseller (or their customer) pays for a package with this coupon. */
-export function quoteCoupon(coupon: Pick<Coupon, "kind" | "value" | "bonusCredits" | "commissionPct">, planId: string): CouponQuote {
+export function quoteCoupon(
+  coupon: Pick<Coupon, "kind" | "value" | "bonusCredits" | "commissionPct">,
+  planId: string,
+): CouponQuote {
   const plan = planById(planId);
   const list = planPriceUsd(planId);
   let payable = list;
