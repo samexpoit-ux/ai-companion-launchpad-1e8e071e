@@ -74,11 +74,23 @@ const OPTIONS: { id: CurrencyCode; label: string }[] = [
 ];
 
 /** Header pill: pick the currency the whole console reports in. */
-export function CurrencyToggle({ className }: { className?: string }) {
+export function CurrencyToggle({
+  className,
+  tone = "light",
+}: {
+  className?: string;
+  /** "dark" = sitting on the gradient header, so labels go white. */
+  tone?: "light" | "dark";
+}) {
   const { currency, setCurrency, rate } = useCurrency();
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <span className="hidden items-center gap-1 text-2xs text-ink-500 xl:flex">
+      <span
+        className={cn(
+          "hidden items-center gap-1 text-2xs xl:flex",
+          tone === "dark" ? "text-white/60" : "text-ink-500",
+        )}
+      >
         <Repeat className="h-3 w-3" aria-hidden />1 USD = ৳{rate}
       </span>
       <div
