@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { BadgeDollarSign, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createPayment,
+  listCoupons,
+  redeemCouponForUser,
   formatMoney,
   listPayments,
   listUsers,
@@ -13,17 +15,13 @@ import {
   type PaymentRow,
 } from "@/lib/admin-api";
 import { PLANS, planById } from "@/lib/plans";
+import { HeroStrip, Panel, Pill } from "@/components/admin/ui";
+import { normalizeCouponCode, quoteCoupon, couponStatus, type Coupon } from "@/lib/resellers";
 
 const STATUSES = ["all", "pending", "paid", "refunded", "failed"] as const;
 
-const statusClass = (status: string) =>
-  status === "paid"
-    ? "bg-emerald-50 text-emerald-700"
-    : status === "pending"
-      ? "bg-amber-50 text-amber-700"
-      : status === "refunded"
-        ? "bg-ink-100 text-ink-600"
-        : "bg-red-50 text-red-600";
+const statusTone = (status: string): "good" | "warn" | "neutral" | "bad" =>
+  status === "paid" ? "good" : status === "pending" ? "warn" : status === "refunded" ? "neutral" : "bad";
 
 export function PaymentsTab() {
   const [rows, setRows] = useState<PaymentRow[]>([]);
@@ -36,6 +34,9 @@ export function PaymentsTab() {
   const [planSlug, setPlanSlug] = useState(PLANS[1].id);
   const [amount, setAmount] = useState("19");
   const [note, setNote] = useState("");
+  // Optional reseller coupon: applying one prices the sale and grants credits.
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [couponCode, setCouponCode] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (status: string) => {
@@ -50,7 +51,12 @@ export function PaymentsTab() {
 
   useEffect(() => {
     void listUsers("").then(setUsers);
+    void listCoupons().then(setCoupons);
   }, []);
+
+  const coupon = coupons.find((c) => c.code === normalizeCouponCode(couponCode)) ?? null;
+  const couponQuote = coupon ? quoteCoupon(coupon, coupon.planSlug ?? planSlug) : null;
+  const couponUsable = coupon ? couponStatus(coupon) === "active" : false;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,18 +66,40 @@ export function PaymentsTab() {
     }
     setSaving(true);
     try {
+      const effectivePlan = coupon?.planSlug ?? planSlug;
+      const amountCents =
+        couponUsable && couponQuote
+          ? Math.round(couponQuote.payableUsd * 100)
+          : Math.round(Number(amount || "0") * 100);
+      const credits =
+        couponUsable && couponQuote ? couponQuote.credits : planById(effectivePlan).credits;
+
       await createPayment({
         userId,
-        planSlug,
-        amountCents: Math.round(Number(amount || "0") * 100),
-        creditsGranted: planById(planSlug).credits,
+        planSlug: effectivePlan,
+        amountCents,
+        creditsGranted: credits,
         status: "paid",
-        provider: "manual",
-        note: note.trim() || undefined,
+        provider: couponUsable ? "manual+coupon" : "manual",
+        note: [note.trim(), couponUsable ? `coupon ${coupon!.code}` : ""]
+          .filter(Boolean)
+          .join(" · ") || undefined,
       });
-      toast.success("Payment recorded");
+
+      // The coupon side of the sale: grants the credits and books commission.
+      if (couponUsable && coupon) {
+        await redeemCouponForUser({
+          code: coupon.code,
+          userId,
+          planSlug: effectivePlan,
+          credits,
+          paidCents: amountCents,
+        });
+      }
+      toast.success(couponUsable ? `Payment + coupon ${coupon!.code} applied` : "Payment recorded");
       setOpen(false);
       setNote("");
+      setCouponCode("");
       await load(filter);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not record payment");
@@ -91,7 +119,14 @@ export function PaymentsTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      <HeroStrip
+        eyebrow="Sales"
+        title="Payments & refunds"
+        subtitle="Record manual sales, apply a reseller coupon, and grant the package credits in one step."
+        icon={BadgeDollarSign}
+        stats={[{ label: "Records", value: String(rows.length) }]}
+      />
       <div className="flex flex-wrap items-center gap-2">
         {STATUSES.map((s) => (
           <button
@@ -116,7 +151,7 @@ export function PaymentsTab() {
       {open && (
         <form
           onSubmit={submit}
-          className="grid gap-3 rounded-2xl border border-ink-200 bg-white/80 p-4 sm:grid-cols-4"
+          className="grid gap-3 rounded-3xl border border-ink-200/80 bg-white p-4 shadow-ds-sm sm:grid-cols-4"
         >
           <label className="text-xs text-ink-600 sm:col-span-2">
             User
@@ -161,7 +196,25 @@ export function PaymentsTab() {
               className="mt-1"
             />
           </label>
-          <label className="text-xs text-ink-600 sm:col-span-3">
+          <label className="text-xs text-ink-600">
+            Reseller coupon (optional)
+            <Input
+              value={couponCode}
+              onChange={(e) => setCouponCode(normalizeCouponCode(e.target.value))}
+              placeholder="NEXURA-PARTNER"
+              className="mt-1"
+            />
+            {couponCode && (
+              <span className="mt-1 block text-2xs text-ink-500">
+                {!coupon
+                  ? "No coupon with this code"
+                  : !couponUsable
+                    ? `Coupon is ${couponStatus(coupon)} — it will not be applied`
+                    : `Reseller pays $${couponQuote!.payableUsd.toFixed(2)} → ${couponQuote!.credits} credits`}
+              </span>
+            )}
+          </label>
+          <label className="text-xs text-ink-600 sm:col-span-2">
             Note
             <Input
               value={note}
@@ -183,7 +236,7 @@ export function PaymentsTab() {
       ) : rows.length === 0 ? (
         <p className="text-sm text-ink-500">No payments recorded yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-ink-200 bg-white/80">
+        <div className="overflow-x-auto rounded-3xl border border-ink-200/80 bg-white shadow-ds-xs">
           <table className="w-full min-w-[760px] text-sm">
             <caption className="sr-only">Payments and their status</caption>
             <thead>
@@ -208,9 +261,7 @@ export function PaymentsTab() {
                     {formatMoney(row.amountCents, row.currency)}
                   </td>
                   <td className="px-4 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-2xs font-semibold uppercase ${statusClass(row.status)}`}>
-                      {row.status}
-                    </span>
+                    <Pill tone={statusTone(row.status)}>{row.status}</Pill>
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex gap-1">
