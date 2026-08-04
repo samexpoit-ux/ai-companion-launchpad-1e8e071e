@@ -351,11 +351,16 @@ export async function runWithFallback(
   messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
   onAttempt?: (attempt: { model: string; ok: boolean; ms: number; error?: string }) => void,
   signal?: AbortSignal,
+  /** Caller bucket for the shared free-model pool (see free-pool.server.ts). */
+  userKey?: string,
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number; upstream: string }> {
   const chain = [route.upstream, ...route.fallbacks];
   const deadline = Date.now() + totalBudgetMs(route.task);
   let lastError: unknown;
   let ran = 0;
+  // Set when the shared free pool refused us: every remaining `:free` model
+  // shares the same account-wide limit, so we stop asking and report once.
+  let freeDenial: FreeSlotDenial | null = null;
   for (const model of chain) {
     // A permanent failure costs no time, so only real attempts consume budget.
     if (ran > 0 && Date.now() + attemptTimeoutMs(route.task) > deadline + attemptTimeoutMs(route.task) / 2) {
@@ -363,6 +368,20 @@ export async function runWithFallback(
         lastError ?? new Error("The build took too long and was stopped before finishing.");
       break;
     }
+
+    const isFree = model.endsWith(":free");
+    let release: (() => void) | null = null;
+    if (isFree) {
+      if (freeDenial) continue; // free pool already said no — don't re-queue
+      const slot = await reserveFreeSlot(userKey ?? "anon", signal);
+      if (!slot.ok) {
+        freeDenial = slot;
+        onAttempt?.({ model, ok: false, ms: 0, error: `free pool ${slot.reason}: ${slot.message}` });
+        continue;
+      }
+      release = slot.release;
+    }
+
     const started = Date.now();
     try {
       const out = await callChatCompletion(route.config, model, messages, route.task, signal);
@@ -399,16 +418,37 @@ export async function runWithFallback(
       if (signal?.aborted) throw err;
       lastError = err;
       const permanent = isPermanentModelError(err);
-      if (!permanent) ran += 1;
+      const limited = isRateLimitError(err);
+      if (limited && isFree) {
+        // Account-wide limit: cool the pool down and stop trying free models.
+        const wait = retryAfterFromError(err);
+        noteFreeRateLimit(wait);
+        freeDenial = {
+          ok: false,
+          reason: "cooldown",
+          retryAfterSec: Math.max(20, wait ?? 30),
+          message:
+            "Nexura's free engines are rate limited right now (shared across all free accounts). Retry in about half a minute, or upgrade for a dedicated paid lane.",
+        };
+      }
+      if (!permanent && !limited) ran += 1;
       onAttempt?.({
         model,
         ok: false,
         ms: Date.now() - started,
-        error: `${permanent ? "unavailable: " : ""}${
+        error: `${permanent ? "unavailable: " : limited ? "rate limited: " : ""}${
           err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300)
         }`,
       });
+    } finally {
+      release?.();
     }
+  }
+  // A free-pool refusal is not a provider failure — report it as a clear,
+  // retryable message instead of a raw upstream error.
+  if (freeDenial) {
+    throw new FreePoolError(freeDenial.message, freeDenial.retryAfterSec, freeDenial.reason);
   }
   throw lastError instanceof Error ? lastError : new Error("All OpenRouter models failed");
 }
+
