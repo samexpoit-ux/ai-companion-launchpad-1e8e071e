@@ -95,6 +95,18 @@ export const Route = createFileRoute("/api/chat")({
         const attempts: TraceAttempt[] = [];
         const requestStarted = Date.now();
 
+        // ---- word budget (pricing is word-based, so the cap is authoritative) ----
+        const promptWords = countWords(lastUser?.content ?? "");
+        if (promptWords > MAX_PROMPT_WORDS) {
+          return apiError(
+            "invalid_request",
+            `This prompt is ${promptWords} words. Keep a single message under ${MAX_PROMPT_WORDS} words — split larger specs into follow-up messages.`,
+            { status: 400 },
+          );
+        }
+
+
+
         // ---- server-side credit enforcement (before any provider call) ----
         let charge;
         try {
