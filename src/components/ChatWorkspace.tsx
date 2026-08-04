@@ -1535,12 +1535,23 @@ function ChatWorkspaceInner() {
 
                       <SendButton
                         onClick={isSending ? cancelGeneration : () => void handleSend()}
-                        disabled={!isSending && !input.trim()}
+                        disabled={!isSending && (!input.trim() || budget.overLimit)}
                         loading={isSending}
                       />
                     </div>
                   </div>
                 </div>
+
+                {coachTips.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-2xs leading-snug text-ink-500">
+                    {coachTips.map((tip) => (
+                      <li key={tip} className={cn(budget.overLimit && "text-destructive")}>
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
 
                 {(attachmentError || voice.error) && (
                   <div
