@@ -150,13 +150,15 @@ export function usageReservationCost(action: CreditAction, inputChars = 0): numb
   return actualUsageCost(action, { inputTokens, outputTokens: maxOutputTokens });
 }
 
-/** Map a chat composer mode ("Build" | "Chat" | "Plan") to a billable action. */
+/** Map a composer mode ("Build" | "Chat" | "Plan" | "Image") to a billable action. */
 export function actionForMode(mode: string): CreditAction {
   const m = mode.toLowerCase();
   if (m === "plan") return "plan";
   if (m === "chat") return "chat";
+  if (m === "image") return "image";
   return "code";
 }
+
 
 export function creditsForPlan(plan: PlanId): number {
   return planById(plan).credits;
