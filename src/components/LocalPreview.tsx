@@ -272,10 +272,24 @@ function runProject(
       return empty;
     }
     if (/\.json$/.test(path)) {
-      const parsed = JSON.parse(source || "{}") as Record<string, unknown>;
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = JSON.parse(source || "{}") as Record<string, unknown>;
+      } catch {
+        // A malformed data file should not kill the whole render.
+        console.info(`[preview] "${path}" is not valid JSON — used an empty object.`);
+      }
       cache.set(path, parsed);
       return parsed;
     }
+    // Markup, docs, config and other non-JS files are not modules: importing one
+    // used to hand raw HTML to Babel and fail the entire build.
+    if (/\.(html?|md|mdx|txt|ya?ml|toml|lock|env)$/i.test(path)) {
+      const empty = { default: source };
+      cache.set(path, empty);
+      return empty;
+    }
+
 
     const out = compileModule(path, source);
     const mod: { exports: Record<string, unknown> } = { exports: {} };
