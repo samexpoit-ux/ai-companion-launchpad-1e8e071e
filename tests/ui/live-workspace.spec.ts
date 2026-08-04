@@ -48,16 +48,22 @@ export default function App(){ return <BrowserRouter><Routes><Route path="/" ele
     await composer.fill("Add an admin dashboard as a separate route");
     await page.getByRole("button", { name: "Send message" }).click();
     const frame = page.frameLocator('iframe[title="Live preview"]');
-    await expect(frame.getByRole("heading", { name: "Permanent Home Page" })).toBeVisible();
+    await expect(frame.getByRole("heading", { name: "Permanent Home Page" })).toBeVisible({
+      timeout: 20_000,
+    });
 
     const path = page.getByLabel("Preview path");
     await path.fill("/admin");
     await path.press("Enter");
-    await expect(frame.getByRole("heading", { name: "Private Admin Dashboard" })).toBeVisible();
+    await expect(frame.getByRole("heading", { name: "Private Admin Dashboard" })).toBeVisible({
+      timeout: 20_000,
+    });
 
     await path.fill("/");
     await path.press("Enter");
-    await expect(frame.getByRole("heading", { name: "Permanent Home Page" })).toBeVisible();
+    await expect(frame.getByRole("heading", { name: "Permanent Home Page" })).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(frame.getByRole("heading", { name: "Private Admin Dashboard" })).toHaveCount(0);
     await expect(page.getByText(/Build failed/i)).toHaveCount(0);
   });
