@@ -327,6 +327,13 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS suspended_by uuid;
 CREATE INDEX IF NOT EXISTS profiles_status_idx ON public.profiles(status);
 
+-- plan mirror columns (kept in sync with the managed schema so plan migrations
+-- that touch public.profiles apply cleanly on self-hosted databases too) -----
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'free',
+  ADD COLUMN IF NOT EXISTS monthly_credit_cents integer NOT NULL DEFAULT 0;
+
+
 -- Admin operators remain unlimited, but every AI request still receives a
 -- ledger reservation so actual tokens, provider spend and action usage can be
 -- finalized and monitored exactly like normal accounts.
