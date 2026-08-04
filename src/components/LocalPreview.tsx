@@ -693,9 +693,11 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
 
       {compileError && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
-          Build failed — see the error overlay for details.
+          <span className="font-semibold">Build failed:</span>{" "}
+          <span className="break-words">{compileError}</span>
         </div>
       )}
+
     </div>
   );
 }
