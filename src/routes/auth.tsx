@@ -48,6 +48,13 @@ const credentials = z.object({
 
 type Mode = "signin" | "signup";
 
+/** Survives the OAuth round trip so social sign-in also honours ?redirect=. */
+const POST_LOGIN_KEY = "nexura:post-login";
+
+function safePath(value: string | null | undefined) {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const { redirect: redirectTo } = Route.useSearch();
@@ -64,8 +71,11 @@ function AuthPage() {
     const go = () => {
       if (done) return;
       done = true;
-      void navigate({ href: redirectTo ?? "/dashboard", replace: true });
+      const stored = safePath(sessionStorage.getItem(POST_LOGIN_KEY));
+      sessionStorage.removeItem(POST_LOGIN_KEY);
+      void navigate({ href: safePath(redirectTo) ?? stored ?? "/dashboard", replace: true });
     };
+
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session) go();
