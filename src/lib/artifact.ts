@@ -25,8 +25,6 @@ export interface ArtifactProject {
 
 const ARTIFACT_RE =
   /<(nexusArtifact|boltArtifact)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
-const ACTION_RE =
-  /<(nexusAction|boltAction)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
 
 // Tolerant scanners: models regularly forget a closing tag on long deliveries.
 const ARTIFACT_OPEN_RE = /<(nexusArtifact|boltArtifact)\b([^>]*)>/gi;
