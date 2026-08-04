@@ -26,9 +26,9 @@ test.describe("Live Workspace", () => {
 <nexusAction type="file" filePath="src/App.tsx">import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import Admin from './pages/Admin';
-export default function App(){ return &lt;BrowserRouter&gt;&lt;Routes&gt;&lt;Route path="/" element={&lt;Home /&gt;} /&gt;&lt;Route path="/admin" element={&lt;Admin /&gt;} /&gt;&lt;/Routes&gt;&lt;/BrowserRouter&gt; }</nexusAction>
-<nexusAction type="file" filePath="src/pages/Home.tsx">export default function Home(){ return &lt;main&gt;&lt;h1&gt;Permanent Home Page&lt;/h1&gt;&lt;p&gt;Public website remains intact.&lt;/p&gt;&lt;/main&gt; }</nexusAction>
-<nexusAction type="file" filePath="src/pages/Admin.tsx">export default function Admin(){ return &lt;main&gt;&lt;h1&gt;Private Admin Dashboard&lt;/h1&gt;&lt;p&gt;Admin route is isolated.&lt;/p&gt;&lt;/main&gt; }</nexusAction>
+export default function App(){ return <BrowserRouter><Routes><Route path="/" element={<Home />} /><Route path="/admin" element={<Admin />} /></Routes></BrowserRouter> }</nexusAction>
+<nexusAction type="file" filePath="src/pages/Home.tsx">export default function Home(){ return <main><h1>Permanent Home Page</h1><p>Public website remains intact.</p></main> }</nexusAction>
+<nexusAction type="file" filePath="src/pages/Admin.tsx">export default function Admin(){ return <main><h1>Private Admin Dashboard</h1><p>Admin route is isolated.</p></main> }</nexusAction>
 </nexusArtifact>`;
 
     await page.route("**/api/chat", (route) =>
