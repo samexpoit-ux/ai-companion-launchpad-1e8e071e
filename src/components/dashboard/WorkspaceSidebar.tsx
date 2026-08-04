@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  Bot,
   Boxes,
   ChevronDown,
   Gift,
@@ -36,10 +37,12 @@ const NAV = [
   { label: "Dashboard", to: "/dashboard", icon: Home, hint: "" },
   { label: "Search", to: "/search", icon: Search, hint: "Ctrl K" },
   { label: "Resources", to: "/resources", icon: Compass, hint: "" },
+  { label: "Browser agent", to: "/agent", icon: Bot, hint: "" },
   { label: "Connectors", to: "/connectors", icon: Plug, hint: "" },
   { label: "Webhooks", to: "/webhooks", icon: Webhook, hint: "" },
   { label: "Domains", to: "/domains", icon: Globe, hint: "" },
 ] as const;
+
 
 const PROJECT_NAV = [
   { label: "All projects", icon: LayoutGrid, filter: "all" },
