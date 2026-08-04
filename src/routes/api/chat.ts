@@ -331,7 +331,9 @@ export const Route = createFileRoute("/api/chat")({
             model: route.friendlyId,
             provider: "openrouter",
             traceId,
+            ...(err instanceof FreePoolError ? { retryAfterSec: err.retryAfterSec } : {}),
           });
+
         }
       },
     },
