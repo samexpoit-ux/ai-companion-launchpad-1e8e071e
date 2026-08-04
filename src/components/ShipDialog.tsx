@@ -81,7 +81,7 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
   return (
     <Dialog>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg max-h-[85dvh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Ship this project</DialogTitle>
           <DialogDescription>
