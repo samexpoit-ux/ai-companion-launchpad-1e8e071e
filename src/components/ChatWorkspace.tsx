@@ -100,6 +100,13 @@ import {
 } from "@/lib/chat-attachments";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PreviewProvider, usePreview, isPreviewable } from "@/components/preview-context";
 import { PreviewPanel } from "@/components/PreviewPanel";
 import { PlayCircle, GripVertical, FolderTree, PanelRight } from "lucide-react";
@@ -115,6 +122,9 @@ const createFreshThread = (): ChatThread => ({
   messages: [],
   updatedAt: Date.now(),
 });
+
+type ComposerMode = "Build" | "Chat" | "Plan" | "Image";
+const COMPOSER_MODES: readonly ComposerMode[] = ["Build", "Chat", "Plan", "Image"];
 
 const tierIcon = (tier: AIModel["tier"]) =>
   tier === "Signature" ? Crown : tier === "Reserve" ? Diamond : Sparkle;
@@ -132,7 +142,10 @@ function ChatWorkspaceInner() {
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeId, setActiveId] = useState<string>("");
   const [modelId, setModelId] = useState<string>(AI_MODELS[0].id);
-  const [mode, setMode] = useState<"Build" | "Chat" | "Plan">("Build");
+  const [mode, setMode] = useState<ComposerMode>("Build");
+  // New project naming: every new workspace asks for a project name first.
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [projectNameDraft, setProjectNameDraft] = useState("");
   const [loadedThreads, setLoadedThreads] = useState<Set<string>>(() => new Set());
   const credits = useCredits();
   // Engine / provider details are admin-only; customers only see credits + workload.
@@ -458,12 +471,30 @@ function ChatWorkspaceInner() {
     ta.style.height = Math.min(ta.scrollHeight, 224) + "px";
   }, [input]);
 
-  const newChat = async () => {
+  // Every new workspace starts by asking for the project / brand name, so the
+  // thread carries the user's own name instead of an auto-generated title.
+  const newChat = () => {
+    setProjectNameDraft("");
+    setNamePromptOpen(true);
+  };
+
+  const createNamedWorkspace = async (rawName: string) => {
+    const name = rawName.trim().slice(0, 60);
+    setNamePromptOpen(false);
     if (active && active.messages.length === 0) {
+      // The active workspace is still empty — just name it instead of stacking
+      // another blank thread.
+      if (name) {
+        setThreads((prev) => prev.map((t) => (t.id === active.id ? { ...t, title: name } : t)));
+        void renameDbThread(active.id, name);
+      }
       setInput("");
       return;
     }
-    const created = await createDbThread({ title: "Untitled dossier", mode: mode.toLowerCase() });
+    const created = await createDbThread({
+      title: name || "Untitled project",
+      mode: mode.toLowerCase(),
+    });
     const t: ChatThread = created
       ? { id: created.id, title: created.title, messages: [], updatedAt: Date.now() }
       : createFreshThread();
@@ -556,7 +587,7 @@ function ChatWorkspaceInner() {
     async (
       text: string,
       thread: ChatThread,
-      requestedMode: "Build" | "Chat" | "Plan" = mode,
+      requestedMode: ComposerMode = mode,
       requestAttachments: ChatAttachment[] = [],
     ) => {
       const value = text.trim();
@@ -588,9 +619,12 @@ function ChatWorkspaceInner() {
         createdAt: Date.now(),
       };
       const isFirst = thread.messages.length === 0;
+      // A workspace the user already named keeps that name forever.
+      const isUnnamed = /^(untitled dossier|untitled project|new chat)$/i.test(thread.title.trim());
+      const autoTitle = isFirst && isUnnamed;
       updateThread(thread.id, (t) => ({
         ...t,
-        title: isFirst ? value.slice(0, 48) : t.title,
+        title: autoTitle ? value.slice(0, 48) : t.title,
         messages: [...t.messages, userMsg],
         updatedAt: Date.now(),
       }));
@@ -600,7 +634,7 @@ function ChatWorkspaceInner() {
       // Right-hand workspace opens itself as soon as work starts (desktop).
       if (!isMobile) openWorkspace();
 
-      if (isFirst) void renameDbThread(thread.id, value.slice(0, 48));
+      if (autoTitle) void renameDbThread(thread.id, value.slice(0, 48));
       void saveMessage({
         threadId: thread.id,
         clientId: userMsg.id,
@@ -751,8 +785,8 @@ function ChatWorkspaceInner() {
     handoffDone.current = true;
     const pending = takePendingPrompt();
     if (!pending) return;
-    if (pending.mode === "Build" || pending.mode === "Chat" || pending.mode === "Plan") {
-      setMode(pending.mode);
+    if (COMPOSER_MODES.includes(pending.mode as ComposerMode)) {
+      setMode(pending.mode as ComposerMode);
     }
 
     // Dashboard prompts always start a new conversation. Reusing whichever
@@ -770,7 +804,7 @@ function ChatWorkspaceInner() {
       setLoadedThreads((prev) => new Set(prev).add(fresh.id));
       setInput("");
       void navigate({ to: "/workspace", search: { thread: fresh.id }, replace: true });
-      await sendText(pending.prompt, fresh, pending.mode as "Build" | "Chat" | "Plan");
+      await sendText(pending.prompt, fresh, pending.mode as ComposerMode);
     })();
   }, [hydrated, sendText, navigate]);
 
@@ -1418,7 +1452,7 @@ function ChatWorkspaceInner() {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" side="top" className="w-64">
-                          {(["Build", "Chat", "Plan"] as const).map((m) => (
+                          {COMPOSER_MODES.map((m) => (
                             <DropdownMenuItem
                               key={m}
                               onSelect={() => setMode(m)}
@@ -1522,9 +1556,54 @@ function ChatWorkspaceInner() {
           </>
         )}
       </PanelGroup>
+
+      <Dialog open={namePromptOpen} onOpenChange={setNamePromptOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Name your project</DialogTitle>
+            <DialogDescription>
+              This becomes the workspace name and the brand name Nexura uses while building.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void createNamedWorkspace(projectNameDraft);
+            }}
+            className="space-y-4"
+          >
+            <input
+              autoFocus
+              value={projectNameDraft}
+              onChange={(e) => setProjectNameDraft(e.target.value)}
+              placeholder="e.g. Lumen Fitness, Nexura Store, Portfolio v2"
+              aria-label="Project name"
+              maxLength={60}
+              className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 outline-none transition focus:border-[color:var(--color-iris)] focus:ring-2 focus:ring-[color:var(--color-iris)]/20"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void createNamedWorkspace("")}
+                className="rounded-lg px-3 py-2 text-xs font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+              >
+                Skip for now
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+                style={{ background: "var(--iris-gradient)" }}
+              >
+                Start building
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
 
 function SendButton({
   onClick,

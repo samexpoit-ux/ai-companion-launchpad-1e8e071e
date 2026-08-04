@@ -42,7 +42,7 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     base: 0.03,
     perKChars: 0.02,
     tier: "chat",
-    note: "Low-cost DeepSeek / Gemini tier",
+    note: "Low-cost chat tier",
     customerNote: "Fast conversation engine",
   },
   plan: {
@@ -60,7 +60,7 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     base: 0.18,
     perKChars: 0.05,
     tier: "code",
-    note: "Claude coding tier when delivery needs it",
+    note: "Top build tier when delivery needs it",
     customerNote: "Highest-quality build engine",
   },
   autofix: {
@@ -78,8 +78,9 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     base: 0.12,
     perKChars: 0.01,
     tier: "image",
-    note: "Cheapest image model (gemini-2.5-flash-image)",
-    customerNote: "Image generation engine",
+    note: "Cheapest capable image model in the router",
+    customerNote: "Image studio — thumbnails, posters & social art",
+
   },
   preview_run: {
     action: "preview_run",
@@ -150,13 +151,15 @@ export function usageReservationCost(action: CreditAction, inputChars = 0): numb
   return actualUsageCost(action, { inputTokens, outputTokens: maxOutputTokens });
 }
 
-/** Map a chat composer mode ("Build" | "Chat" | "Plan") to a billable action. */
+/** Map a composer mode ("Build" | "Chat" | "Plan" | "Image") to a billable action. */
 export function actionForMode(mode: string): CreditAction {
   const m = mode.toLowerCase();
   if (m === "plan") return "plan";
   if (m === "chat") return "chat";
+  if (m === "image") return "image";
   return "code";
 }
+
 
 export function creditsForPlan(plan: PlanId): number {
   return planById(plan).credits;
