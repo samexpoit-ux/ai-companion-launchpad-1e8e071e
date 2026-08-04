@@ -70,10 +70,15 @@ import { cn } from "@/lib/utils";
 import {
   actionForMode,
   estimateCost,
+  estimateCostForWords,
   formatCredits,
+  promptCoach,
+  wordBudget,
+  MAX_PROMPT_WORDS,
   ACTION_RULES,
   type CreditAction,
 } from "@/lib/credits";
+
 import { useCredits } from "@/hooks/useCredits";
 import { useAdmin } from "@/hooks/useAdmin";
 import { CreditMeter } from "@/components/CreditMeter";
