@@ -215,11 +215,36 @@ export function ResellersTab() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[
-          { label: "Resellers", value: String(totals.resellers), icon: Users, accent: "var(--color-iris)" },
-          { label: "Coupon sales", value: String(totals.sales), icon: Ticket, accent: "var(--color-orchid)" },
-          { label: "Gross paid", value: usd(totals.paid), icon: Coins, accent: "var(--color-mint)" },
-          { label: "Commission owed", value: usd(totals.commission), icon: Percent, accent: "var(--color-sun)" },
-          { label: "Net to us", value: usd(totals.net), icon: Coins, accent: "var(--color-iris-cyan)" },
+          {
+            label: "Resellers",
+            value: String(totals.resellers),
+            icon: Users,
+            accent: "var(--color-iris)",
+          },
+          {
+            label: "Coupon sales",
+            value: String(totals.sales),
+            icon: Ticket,
+            accent: "var(--color-orchid)",
+          },
+          {
+            label: "Gross paid",
+            value: usd(totals.paid),
+            icon: Coins,
+            accent: "var(--color-mint)",
+          },
+          {
+            label: "Commission owed",
+            value: usd(totals.commission),
+            icon: Percent,
+            accent: "var(--color-sun)",
+          },
+          {
+            label: "Net to us",
+            value: usd(totals.net),
+            icon: Coins,
+            accent: "var(--color-iris-cyan)",
+          },
         ].map((card) => (
           <StatCard
             key={card.label}
@@ -321,7 +346,6 @@ export function ResellersTab() {
           </table>
         </div>
       </Panel>
-
 
       {/* -------------------------------------------------- create a coupon */}
       <Panel

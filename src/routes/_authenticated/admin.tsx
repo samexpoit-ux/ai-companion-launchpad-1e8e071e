@@ -314,9 +314,7 @@ function AdminPage() {
                 </h1>
               </div>
               <CurrencyToggle className="ml-auto shrink-0" tone="dark" />
-              <span
-                className="hidden shrink-0 rounded-full bg-white/12 px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] ring-1 ring-inset ring-white/20 lg:block"
-              >
+              <span className="hidden shrink-0 rounded-full bg-white/12 px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] ring-1 ring-inset ring-white/20 lg:block">
                 Premium controls
               </span>
             </div>

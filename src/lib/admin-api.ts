@@ -12,7 +12,6 @@ import type { Json } from "@/integrations/supabase/types";
 import { getAdminDirectory, listAdminUsers } from "@/lib/admin-directory.functions";
 import { isPlanId, type ResellerPriceOverrides } from "@/lib/plans";
 
-
 /* ------------------------------------------------------------------ types */
 
 export interface AdminOverview {
@@ -212,7 +211,6 @@ export async function listUsers(search = ""): Promise<AdminUserRow[]> {
     console.error("[admin] listUsers failed", profiles.error.message);
     return [];
   }
-
 
   const ids = (profiles.data ?? []).map((p) => p.id);
   if (ids.length === 0) return [];
@@ -715,7 +713,9 @@ export async function fetchRequestTraces(days = 7, limit = 200): Promise<TraceRe
             col: string,
             opts: { ascending: boolean },
           ) => {
-            limit: (n: number) => Promise<{ data: Record<string, unknown>[] | null; error: unknown }>;
+            limit: (
+              n: number,
+            ) => Promise<{ data: Record<string, unknown>[] | null; error: unknown }>;
           };
         };
       };
@@ -797,8 +797,7 @@ function couponFromRow(r: Record<string, unknown>): Coupon {
     resellerEmail: (r["reseller_email"] as string | null) ?? null,
     resellerName: (r["reseller_name"] as string | null) ?? null,
     commissionPct: Number(r["commission_pct"] ?? 0),
-    maxRedemptions:
-      r["max_redemptions"] == null ? null : Number(r["max_redemptions"]),
+    maxRedemptions: r["max_redemptions"] == null ? null : Number(r["max_redemptions"]),
     timesRedeemed: Number(r["times_redeemed"] ?? 0),
     expiresAt: (r["expires_at"] as string | null) ?? null,
     isActive: r["is_active"] !== false,
@@ -879,7 +878,9 @@ export interface CouponRedemptionRow {
 export async function listCouponRedemptions(limit = 200): Promise<CouponRedemptionRow[]> {
   const { data, error } = await supabase
     .from("coupon_redemptions")
-    .select("id,code,user_id,plan_slug,credits_granted,paid_cents,discount_cents,commission_cents,created_at")
+    .select(
+      "id,code,user_id,plan_slug,credits_granted,paid_cents,discount_cents,commission_cents,created_at",
+    )
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) {

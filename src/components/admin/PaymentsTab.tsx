@@ -21,7 +21,13 @@ import { normalizeCouponCode, quoteCoupon, couponStatus, type Coupon } from "@/l
 const STATUSES = ["all", "pending", "paid", "refunded", "failed"] as const;
 
 const statusTone = (status: string): "good" | "warn" | "neutral" | "bad" =>
-  status === "paid" ? "good" : status === "pending" ? "warn" : status === "refunded" ? "neutral" : "bad";
+  status === "paid"
+    ? "good"
+    : status === "pending"
+      ? "warn"
+      : status === "refunded"
+        ? "neutral"
+        : "bad";
 
 export function PaymentsTab() {
   const [rows, setRows] = useState<PaymentRow[]>([]);
@@ -81,9 +87,9 @@ export function PaymentsTab() {
         creditsGranted: credits,
         status: "paid",
         provider: couponUsable ? "manual+coupon" : "manual",
-        note: [note.trim(), couponUsable ? `coupon ${coupon!.code}` : ""]
-          .filter(Boolean)
-          .join(" · ") || undefined,
+        note:
+          [note.trim(), couponUsable ? `coupon ${coupon!.code}` : ""].filter(Boolean).join(" · ") ||
+          undefined,
       });
 
       // The coupon side of the sale: grants the credits and books commission.
@@ -174,7 +180,9 @@ export function PaymentsTab() {
               value={planSlug}
               onChange={(e) => {
                 setPlanSlug(e.target.value as typeof planSlug);
-                setAmount(String(Number(planById(e.target.value).price.replace(/[^0-9.]/g, "")) || 0));
+                setAmount(
+                  String(Number(planById(e.target.value).price.replace(/[^0-9.]/g, "")) || 0),
+                );
               }}
               className="mt-1 w-full rounded-lg border border-ink-200 bg-white px-2 py-2 text-sm"
             >
@@ -241,12 +249,24 @@ export function PaymentsTab() {
             <caption className="sr-only">Payments and their status</caption>
             <thead>
               <tr className="border-b border-ink-200 text-left text-xs uppercase tracking-wider text-ink-500">
-                <th scope="col" className="px-4 py-2">Date</th>
-                <th scope="col" className="px-4 py-2">User</th>
-                <th scope="col" className="px-4 py-2">Plan</th>
-                <th scope="col" className="px-4 py-2">Amount</th>
-                <th scope="col" className="px-4 py-2">Status</th>
-                <th scope="col" className="px-4 py-2">Actions</th>
+                <th scope="col" className="px-4 py-2">
+                  Date
+                </th>
+                <th scope="col" className="px-4 py-2">
+                  User
+                </th>
+                <th scope="col" className="px-4 py-2">
+                  Plan
+                </th>
+                <th scope="col" className="px-4 py-2">
+                  Amount
+                </th>
+                <th scope="col" className="px-4 py-2">
+                  Status
+                </th>
+                <th scope="col" className="px-4 py-2">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -266,12 +286,20 @@ export function PaymentsTab() {
                   <td className="px-4 py-2">
                     <div className="flex gap-1">
                       {row.status !== "paid" && (
-                        <Button size="sm" variant="outline" onClick={() => void setStatus(row, "paid")}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void setStatus(row, "paid")}
+                        >
                           Mark paid
                         </Button>
                       )}
                       {row.status === "paid" && (
-                        <Button size="sm" variant="outline" onClick={() => void setStatus(row, "refunded")}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void setStatus(row, "refunded")}
+                        >
                           Refund
                         </Button>
                       )}

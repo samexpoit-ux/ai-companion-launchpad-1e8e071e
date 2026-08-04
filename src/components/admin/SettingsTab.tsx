@@ -61,7 +61,12 @@ const GROUPS: GroupSchema[] = [
     accent: "var(--color-mint)",
     fields: [
       { key: "enabled", label: "Allow new sign-ups", default: true },
-      { key: "free_credits", label: "Starting free credits", hint: "Free plan ceiling", default: 5 },
+      {
+        key: "free_credits",
+        label: "Starting free credits",
+        hint: "Free plan ceiling",
+        default: 5,
+      },
       { key: "require_email_confirm", label: "Require email confirmation", default: true },
     ],
   },
@@ -228,12 +233,7 @@ export function SettingsTab() {
         <p className="text-xs text-ink-500">
           Defaults are shown for settings that have never been saved — press Save to store them.
         </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={() => void load()}
-        >
+        <Button variant="outline" size="sm" className="ml-auto" onClick={() => void load()}>
           <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Reload
         </Button>
       </div>
@@ -280,7 +280,8 @@ export function SettingsTab() {
                   </>
                 ) : (
                   <>
-                    <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Save {group.title.toLowerCase()}
+                    <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Save{" "}
+                    {group.title.toLowerCase()}
                   </>
                 )}
               </Button>

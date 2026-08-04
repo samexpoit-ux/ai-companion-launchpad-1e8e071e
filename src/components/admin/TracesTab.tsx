@@ -1,11 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  GitBranch,
-  RefreshCw,
-  Timer,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, GitBranch, RefreshCw, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchRequestTraces, type RequestTraceRow, type TraceReport } from "@/lib/admin-api";
@@ -83,7 +77,9 @@ function AttemptChain({ row }: { row: RequestTraceRow }) {
             title={a.error ?? undefined}
             className={cn(
               "rounded-md px-1.5 py-0.5 font-mono text-2xs",
-              a.ok ? "bg-[color:var(--color-mint-soft)] text-[color:var(--color-mint)]" : "bg-[color:var(--color-flare-soft)] text-[color:var(--color-flare)]",
+              a.ok
+                ? "bg-[color:var(--color-mint-soft)] text-[color:var(--color-mint)]"
+                : "bg-[color:var(--color-flare-soft)] text-[color:var(--color-flare)]",
             )}
           >
             {shortModel(a.model)} · {a.ms}ms
