@@ -24,6 +24,7 @@ import {
   FREE_OSS,
   FREE_POWER,
   FREE_SMART,
+  IMAGE_MODEL,
   LIGHT_CODE_CHAIN,
   TIER_CHAINS,
   clampChainToCeiling,
@@ -31,7 +32,7 @@ import {
 import { planById, type PlanId } from "./plans";
 
 
-export type TaskKind = "chat" | "code" | "reason" | "fix" | "fast";
+export type TaskKind = "chat" | "code" | "reason" | "fix" | "fast" | "image";
 
 export interface OpenRouterConfig {
   baseURL: string;
@@ -85,6 +86,7 @@ const TASK_MODELS: Record<TaskKind, string[]> = {
   reason: [...TIER_CHAINS.reason],
   chat: [...TIER_CHAINS.chat],
   fast: [...TIER_CHAINS.fast],
+  image: [...TIER_CHAINS.image],
 };
 
 const FRIENDLY_BY_UPSTREAM: Record<string, string> = {
@@ -98,6 +100,7 @@ const FRIENDLY_BY_UPSTREAM: Record<string, string> = {
   [FREE_SMART]: "nx-auto",
   [FREE_FAST]: "nx-flash",
   [FREE_OSS]: "nx-auto",
+  [IMAGE_MODEL]: "nx-vision",
 };
 
 
@@ -172,7 +175,10 @@ export function resolveRoute(
   const prompt = options?.prompt ?? "";
   const task: TaskKind = options?.task ?? detectTask(prompt);
   const ceiling = planById(options?.plan).ceiling;
-  const chain = clampChainToCeiling(chainFor(task, prompt), ceiling);
+  // Image generation has exactly one cheap model — clamping it away would leave
+  // the request unrunnable, so the image chain is used as-is.
+  const chain =
+    task === "image" ? [...TASK_MODELS.image] : clampChainToCeiling(chainFor(task, prompt), ceiling);
 
   // A legacy explicit pick only nudges the chain to the front; it never
   // overrides a cheaper-is-fine decision for trivial prompts.
@@ -198,6 +204,7 @@ export function resolveRoute(
 function maxTokensFor(model: string, task: TaskKind): number {
   const paid = !model.endsWith(":free");
   if (!paid) return 4096;
+  if (task === "image") return 2400;
   if (task === "code" || task === "fix") return 9000;
   if (task === "reason") return 3000;
   return 1600;
@@ -221,6 +228,7 @@ export async function callChatCompletion(
       model: upstreamModel,
       messages,
       temperature: task === "code" || task === "fix" ? 0.2 : 0.7,
+      ...(task === "image" ? { modalities: ["image", "text"] } : {}),
       max_tokens: maxTokensFor(upstreamModel, task),
       stream: false,
       // Real token + dollar cost of the call comes back in `usage`.
@@ -240,14 +248,29 @@ export async function callChatCompletion(
   }
 
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
+    choices?: Array<{
+      message?: {
+        content?: string;
+        images?: Array<{ image_url?: { url?: string }; type?: string }>;
+      };
+    }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number };
     error?: { message?: string };
   };
   if (data.error?.message) {
     throw new Error(`[openrouter:${upstreamModel}] ${data.error.message}`);
   }
-  const content = data.choices?.[0]?.message?.content ?? "";
+  const message = data.choices?.[0]?.message;
+  const images = (message?.images ?? [])
+    .map((img) => img?.image_url?.url)
+    .filter((url): url is string => typeof url === "string" && url.length > 0);
+  // Generated images come back as data URLs; render them as markdown so the
+  // chat bubble shows the artwork inline and the user can save it.
+  const content = images.length
+    ? `${images.map((url, i) => `![Generated image ${i + 1}](${url})`).join("\n\n")}${
+        message?.content ? `\n\n${message.content}` : ""
+      }`
+    : (message?.content ?? "");
   const tokens = data.usage?.total_tokens ?? Math.round(content.length / 3.6);
   const costUsd = typeof data.usage?.cost === "number" ? data.usage.cost : 0;
   return {
