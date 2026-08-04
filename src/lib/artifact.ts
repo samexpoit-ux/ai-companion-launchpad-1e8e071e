@@ -28,6 +28,14 @@ const ARTIFACT_RE =
 const ACTION_RE =
   /<(nexusAction|boltAction)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
 
+// Tolerant scanners: models regularly forget a closing tag on long deliveries.
+const ARTIFACT_OPEN_RE = /<(nexusArtifact|boltArtifact)\b([^>]*)>/gi;
+const ARTIFACT_ANY_RE = /<\/?(nexusArtifact|boltArtifact)\b[^>]*>/gi;
+const ACTION_OPEN_RE = /<(nexusAction|boltAction)\b([^>]*)>/gi;
+// Any boundary that must terminate an action body, closed properly or not.
+const BOUNDARY_RE =
+  /<\/?(nexusAction|boltAction|nexusArtifact|boltArtifact)\b[^>]*>/gi;
+
 function attr(raw: string, name: string): string | undefined {
   const m = raw.match(new RegExp(`${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i"));
   return m ? (m[2] ?? m[3]) : undefined;
@@ -37,8 +45,12 @@ function cleanCode(input: string): string {
   let code = input.replace(/\r\n/g, "\n");
   // Models often wrap the file body in a markdown fence anyway.
   code = code.replace(/^\s*```[a-zA-Z0-9+-]*\n/, "").replace(/\n?```\s*$/, "");
+  // Safety net: a protocol tag must never survive inside a source file — it is
+  // not valid code in any language and used to surface as "Unexpected token".
+  code = code.replace(BOUNDARY_RE, "");
   return code.replace(/^\n+/, "").replace(/\s+$/, "") + "\n";
 }
+
 
 const ENTRY_PRIORITY = [
   "src/App.tsx",
