@@ -17,6 +17,7 @@ import { fetchUsageReport, type UsageReport } from "@/lib/admin-api";
 import { formatUsd } from "@/lib/credit-ledger";
 import { formatCredits } from "@/lib/credits";
 import { DEFAULT_PRICE_PER_CREDIT, profitSummary, type ProfitRow } from "@/lib/profit";
+import { useCurrency } from "@/components/admin/currency";
 import { EmptyState, Panel, Pill, SectionHeading, StatCard, StatSkeleton } from "@/components/admin/ui";
 import { PackageEconomicsPanel } from "@/components/admin/PackageEconomicsPanel";
 
@@ -41,6 +42,7 @@ const shortModel = (value: string) => value.split("/").pop() ?? value;
  * actually cost, and where the profit comes from (action, engine, customer).
  */
 export function ProfitTab() {
+  const { money, dual, currency } = useCurrency();
   const [days, setDays] = useState<number>(30);
   const [price, setPrice] = useState<string>(String(DEFAULT_PRICE_PER_CREDIT));
   const [report, setReport] = useState<UsageReport>(EMPTY);
@@ -84,7 +86,7 @@ export function ProfitTab() {
         </div>
 
         <label className="flex items-center gap-2 text-xs text-ink-500">
-          Sell price / credit
+          Sell price / credit (USD)
           <Input
             value={price}
             onChange={(e) => setPrice(e.target.value)}
@@ -122,10 +124,10 @@ export function ProfitTab() {
               Gross profit · last {days === 1 ? "24h" : `${days} days`}
             </p>
             <p className="mt-1 font-display text-4xl font-semibold tracking-tight">
-              {formatUsd(summary.profitUsd)}
+              {dual(summary.profitUsd)}
             </p>
             <p className="mt-1.5 text-xs text-white/60">
-              {formatUsd(summary.revenueUsd)} sold · {formatUsd(summary.costUsd)} engine cost ·{" "}
+              {money(summary.revenueUsd)} sold · {money(summary.costUsd)} engine cost ·{" "}
               {formatCredits(summary.credits)} credits over {summary.requests} billed requests
             </p>
           </div>
@@ -133,7 +135,7 @@ export function ProfitTab() {
           <div className="ml-auto flex flex-wrap gap-2">
             <HeroChip label="Margin" value={`${summary.marginPct}%`} />
             <HeroChip label="Cost multiple" value={`${summary.multiple}×`} tone={healthy ? "good" : "warn"} />
-            <HeroChip label="Cost / credit" value={formatUsd(summary.costPerCredit)} />
+            <HeroChip label="Cost / credit" value={money(summary.costPerCredit)} />
           </div>
         </div>
 
@@ -158,7 +160,7 @@ export function ProfitTab() {
               Retained margin
             </span>
             <span className="ml-auto">
-              Safe floor at 3× cost: {formatUsd(summary.breakEvenPrice)} / credit
+              Safe floor at 3× cost: {money(summary.breakEvenPrice)} / credit
             </span>
           </div>
         </div>
@@ -171,18 +173,18 @@ export function ProfitTab() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Revenue"
-            value={formatUsd(summary.revenueUsd)}
+            value={money(summary.revenueUsd)}
             icon={Wallet}
             accent="var(--color-iris)"
-            hint={`At ${formatUsd(perCredit)} per credit`}
+            hint={`At ${money(perCredit)} per credit · reporting in ${currency}`}
           />
           <StatCard
             label="Engine cost"
-            value={formatUsd(summary.costUsd)}
+            value={money(summary.costUsd)}
             icon={DollarSign}
             accent="var(--color-flare)"
             progress={summary.revenueUsd > 0 ? summary.costUsd / summary.revenueUsd : 0}
-            hint={`${formatUsd(summary.costPerCredit)} average per credit`}
+            hint={`${money(summary.costPerCredit)} average per credit`}
           />
           <StatCard
             label="Margin"

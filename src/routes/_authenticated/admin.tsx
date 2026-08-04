@@ -28,6 +28,7 @@ import { SettingsTab } from "@/components/admin/SettingsTab";
 import { TracesTab } from "@/components/admin/TracesTab";
 import { ProfitTab } from "@/components/admin/ProfitTab";
 import { AuditTab } from "@/components/admin/AuditTab";
+import { AdminCurrencyProvider, CurrencyToggle } from "@/components/admin/currency";
 import { useAdmin } from "@/hooks/useAdmin";
 import { cn } from "@/lib/utils";
 
@@ -209,6 +210,7 @@ function AdminPage() {
   );
 
   return (
+    <AdminCurrencyProvider>
     <main className="min-h-dvh bg-ink-100 text-ink-900 lg:flex">
       {/* Desktop sidebar */}
       <aside
@@ -298,8 +300,9 @@ function AdminPage() {
                 {active.label}
               </h1>
             </div>
+            <CurrencyToggle className="ml-auto shrink-0" />
             <span
-              className="ml-auto hidden shrink-0 rounded-full px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] shadow-ds-xs sm:block"
+              className="hidden shrink-0 rounded-full px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] shadow-ds-xs lg:block"
               style={{ background: "var(--premium-gradient)" }}
             >
               Premium controls
@@ -325,5 +328,6 @@ function AdminPage() {
         </section>
       </div>
     </main>
+    </AdminCurrencyProvider>
   );
 }
