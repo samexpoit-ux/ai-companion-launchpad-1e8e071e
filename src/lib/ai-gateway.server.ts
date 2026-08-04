@@ -212,7 +212,7 @@ function maxTokensFor(model: string, task: TaskKind): number {
 
 /** Per-attempt wall clock. A hung provider must never hold the whole request. */
 export function attemptTimeoutMs(task: TaskKind): number {
-  if (task === "code" || task === "fix") return 150_000;
+  if (task === "code" || task === "fix") return 110_000;
   if (task === "image") return 90_000;
   if (task === "reason") return 90_000;
   return 60_000;
@@ -220,7 +220,7 @@ export function attemptTimeoutMs(task: TaskKind): number {
 
 /** Whole-request budget: after this we stop walking the chain and report. */
 export function totalBudgetMs(task: TaskKind): number {
-  return task === "code" || task === "fix" ? 330_000 : 150_000;
+  return task === "code" || task === "fix" ? 240_000 : 120_000;
 }
 
 /**
@@ -358,7 +358,7 @@ export async function runWithFallback(
   let ran = 0;
   for (const model of chain) {
     // A permanent failure costs no time, so only real attempts consume budget.
-    if (ran > 0 && Date.now() >= deadline) {
+    if (ran > 0 && Date.now() + attemptTimeoutMs(route.task) > deadline + attemptTimeoutMs(route.task) / 2) {
       lastError =
         lastError ?? new Error("The build took too long and was stopped before finishing.");
       break;
