@@ -1,6 +1,8 @@
 import { apiErrorResponse, codeFromUpstream } from "@/lib/api-error";
 import { createFileRoute } from "@tanstack/react-router";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
+import { FreePoolError, poolKey } from "@/lib/free-pool.server";
+
 import { isPlanId } from "@/lib/plans";
 import {
   MAX_PROMPT_WORDS,
