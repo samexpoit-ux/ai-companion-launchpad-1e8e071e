@@ -209,15 +209,19 @@ export function resolveRoute(
 /* Execution                                                           */
 /* ------------------------------------------------------------------ */
 
-/** Keep paid calls bounded so cost stays predictable. */
+/**
+ * Keep paid calls bounded so cost stays predictable. Builds need a real output
+ * budget on every lane: a 4k cap truncated multi-page deliveries mid-artifact,
+ * which surfaced to users as "incomplete build delivery".
+ */
 function maxTokensFor(model: string, task: TaskKind): number {
   const paid = !model.endsWith(":free");
-  if (!paid) return 4096;
   if (task === "image") return 2400;
-  if (task === "code" || task === "fix") return 9000;
+  if (task === "code" || task === "fix") return paid ? 9000 : 8000;
   if (task === "reason") return 3000;
-  return 1600;
+  return paid ? 1600 : 1600;
 }
+
 
 /** Per-attempt wall clock. A hung provider must never hold the whole request. */
 export function attemptTimeoutMs(task: TaskKind): number {
@@ -229,8 +233,43 @@ export function attemptTimeoutMs(task: TaskKind): number {
 
 /** Whole-request budget: after this we stop walking the chain and report. */
 export function totalBudgetMs(task: TaskKind): number {
-  return task === "code" || task === "fix" ? 240_000 : 120_000;
+  return task === "code" || task === "fix" ? 300_000 : 120_000;
 }
+
+/** Minimum room we insist on before starting another model in the chain. */
+const MIN_ATTEMPT_ROOM_MS = 25_000;
+
+/** How many continuation calls we allow to finish a truncated build. */
+const MAX_CONTINUATIONS = 2;
+
+/** True when the build reply carries a complete artifact with a real file. */
+export function hasCompleteDelivery(content: string): boolean {
+  const hasArtifact = /<nexusArtifact\b[\s\S]*?<\/nexusArtifact>/i.test(content);
+  // A build can target any stack, so accept a React entry, a static web entry,
+  // or a real backend/infra file as proof of delivery.
+  const hasEntry =
+    /<nexusAction\b[^>]*filePath=["'][^"']*\.(?:tsx|jsx|html|php|blade\.php|ts|js|py|go|rb|java|sql|ya?ml|toml)["']/i.test(
+      content,
+    ) || /<nexusAction\b[^>]*filePath=["'][^"']*Dockerfile[^"']*["']/i.test(content);
+  return hasArtifact && hasEntry;
+}
+
+/**
+ * Last-resort repair for a build that was cut off after real files landed:
+ * drop the half-written trailing action and close the artifact so the user gets
+ * the files that did arrive instead of a hard failure.
+ */
+export function salvageTruncatedDelivery(content: string): string | null {
+  if (!/<nexusArtifact\b/i.test(content)) return null;
+  if (/<\/nexusArtifact>/i.test(content)) return null;
+  const lastClose = content.toLowerCase().lastIndexOf("</nexusaction>");
+  if (lastClose === -1) return null;
+  const trimmed = content.slice(0, lastClose + "</nexusAction>".length);
+  if (!/<nexusAction\b[^>]*filePath=/i.test(trimmed)) return null;
+  const repaired = `${trimmed}\n</nexusArtifact>`;
+  return hasCompleteDelivery(repaired) ? repaired : null;
+}
+
 
 /**
  * Errors that mean "this model can never run on this account" (bad id, no
@@ -270,7 +309,7 @@ export async function callChatCompletion(
   messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
   task: TaskKind = "chat",
   signal?: AbortSignal,
-): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number }> {
+): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number; truncated: boolean }> {
   const isFree = upstreamModel.endsWith(":free");
   const guard = combineSignals(attemptTimeoutMs(task), signal);
   let res: Response;
@@ -316,6 +355,8 @@ export async function callChatCompletion(
 
   const data = (await res.json()) as {
     choices?: Array<{
+      finish_reason?: string;
+      native_finish_reason?: string;
       message?: {
         content?: string;
         images?: Array<{ image_url?: { url?: string }; type?: string }>;
@@ -327,7 +368,8 @@ export async function callChatCompletion(
   if (data.error?.message) {
     throw new Error(`[openrouter:${upstreamModel}] ${data.error.message}`);
   }
-  const message = data.choices?.[0]?.message;
+  const choice = data.choices?.[0];
+  const message = choice?.message;
   const images = (message?.images ?? [])
     .map((img) => img?.image_url?.url)
     .filter((url): url is string => typeof url === "string" && url.length > 0);
@@ -340,14 +382,19 @@ export async function callChatCompletion(
     : (message?.content ?? "");
   const tokens = data.usage?.total_tokens ?? Math.round(content.length / 3.6);
   const costUsd = typeof data.usage?.cost === "number" ? data.usage.cost : 0;
+  const finishReason = choice?.finish_reason ?? choice?.native_finish_reason ?? "";
   return {
     content,
     tokens,
     inputTokens: data.usage?.prompt_tokens ?? 0,
     outputTokens: data.usage?.completion_tokens ?? Math.round(content.length / 3.6),
     costUsd,
+    // "length" means the provider hit the output cap and cut the answer off —
+    // the caller can ask for a continuation instead of discarding the build.
+    truncated: finishReason === "length",
   };
 }
+
 
 /**
  * Run the primary model, then walk the fallback chain on failure.
@@ -372,11 +419,13 @@ export async function runWithFallback(
   let freeDenial: FreeSlotDenial | null = null;
   for (const model of chain) {
     // A permanent failure costs no time, so only real attempts consume budget.
-    if (ran > 0 && Date.now() + attemptTimeoutMs(route.task) > deadline + attemptTimeoutMs(route.task) / 2) {
+    // Stop only when there is genuinely no room left for another useful attempt.
+    if (ran > 0 && Date.now() + MIN_ATTEMPT_ROOM_MS > deadline) {
       lastError =
         lastError ?? new Error("The build took too long and was stopped before finishing.");
       break;
     }
+
 
     const isFree = model.endsWith(":free");
     let release: (() => void) | null = null;
@@ -393,26 +442,124 @@ export async function runWithFallback(
 
     const started = Date.now();
     try {
-      const out = await callChatCompletion(route.config, model, messages, route.task, signal);
+      let out = await callChatCompletion(route.config, model, messages, route.task, signal);
       ran += 1;
       if (out.content.trim()) {
-        // Build mode is a delivery contract, not a normal chat answer. If a
-        // provider only explains the page, continue to the next coding model.
+        // Build mode is a delivery contract, not a normal chat answer.
         if (route.task === "code") {
-          const hasArtifact = /<nexusArtifact\b[\s\S]*?<\/nexusArtifact>/i.test(out.content);
-          // A build can target any stack, so accept a React entry, a static web
-          // entry, or a real backend/infra file as proof of delivery.
-          const hasEntry =
-            /<nexusAction\b[^>]*filePath=["'][^"']*\.(?:tsx|jsx|html|php|blade\.php|ts|js|py|go|rb|java|sql|ya?ml|toml)["']/i.test(
-              out.content,
-            ) || /<nexusAction\b[^>]*filePath=["'][^"']*Dockerfile[^"']*["']/i.test(out.content);
-          if (!hasArtifact || !hasEntry) {
-            lastError = new Error(`[openrouter:${model}] incomplete build delivery`);
+          // The usual cause of a missing closing tag is the provider hitting its
+          // output cap. Ask the same model to continue from where it stopped
+          // instead of throwing away a build that is 90% written.
+          let continuations = 0;
+          while (
+            !hasCompleteDelivery(out.content) &&
+            out.truncated &&
+            continuations < MAX_CONTINUATIONS &&
+            Date.now() + MIN_ATTEMPT_ROOM_MS < deadline
+          ) {
+            continuations += 1;
+            const tail = out.content.slice(-4000);
+            const next = await callChatCompletion(
+              route.config,
+              model,
+              [
+                ...messages,
+                { role: "assistant", content: tail },
+                {
+                  role: "user",
+                  content:
+                    "Your previous message was cut off by the output limit. Continue the artifact from exactly where it stopped — no recap, no code fences, no repeated content — and finish with the closing </nexusArtifact> tag.",
+                },
+              ],
+              route.task,
+              signal,
+            );
+            out = {
+              content: `${out.content}${next.content}`,
+              tokens: out.tokens + next.tokens,
+              inputTokens: out.inputTokens + next.inputTokens,
+              outputTokens: out.outputTokens + next.outputTokens,
+              costUsd: out.costUsd + next.costUsd,
+              truncated: next.truncated,
+            };
+            onAttempt?.({
+              model,
+              ok: hasCompleteDelivery(out.content),
+              ms: Date.now() - started,
+              error: hasCompleteDelivery(out.content)
+                ? undefined
+                : `continued truncated delivery (${continuations}/${MAX_CONTINUATIONS})`,
+            });
+          }
+
+          // Some engines answer with plain code fences and ignore the delivery
+          // protocol. One cheap reformat pass turns that into a real build
+          // instead of failing a build that already contains the code.
+          if (
+            !hasCompleteDelivery(out.content) &&
+            !out.truncated &&
+            /```/.test(out.content) &&
+            Date.now() + MIN_ATTEMPT_ROOM_MS < deadline
+          ) {
+            const reformat = await callChatCompletion(
+              route.config,
+              model,
+              [
+                ...messages,
+                { role: "assistant", content: out.content.slice(-12000) },
+                {
+                  role: "user",
+                  content:
+                    "Your answer was not in the required delivery format. Re-emit the SAME project as one <nexusArtifact id=\"app\" title=\"App\"> block containing one <nexusAction type=\"file\" filePath=\"...\">...</nexusAction> per file, with no markdown code fences and no commentary, ending with </nexusArtifact>.",
+                },
+              ],
+              route.task,
+              signal,
+            );
+            if (reformat.content.trim()) {
+              out = {
+                content: reformat.content,
+                tokens: out.tokens + reformat.tokens,
+                inputTokens: out.inputTokens + reformat.inputTokens,
+                outputTokens: out.outputTokens + reformat.outputTokens,
+                costUsd: out.costUsd + reformat.costUsd,
+                truncated: reformat.truncated,
+              };
+              onAttempt?.({
+                model,
+                ok: hasCompleteDelivery(out.content),
+                ms: Date.now() - started,
+                error: hasCompleteDelivery(out.content)
+                  ? undefined
+                  : "reformat pass still missing the artifact",
+              });
+            }
+          }
+
+          if (!hasCompleteDelivery(out.content)) {
+
+            const salvaged = salvageTruncatedDelivery(out.content);
+            if (salvaged) {
+              onAttempt?.({
+                model,
+                ok: true,
+                ms: Date.now() - started,
+                error: "recovered a truncated build by closing the artifact",
+              });
+              return { ...out, content: salvaged, upstream: model };
+            }
+            lastError = new Error(
+              out.truncated
+                ? `[openrouter:${model}] build was cut off before any file was complete`
+                : `[openrouter:${model}] incomplete build delivery`,
+            );
             onAttempt?.({
               model,
               ok: false,
               ms: Date.now() - started,
-              error: "incomplete build delivery: missing artifact or entry file",
+              error: out.truncated
+                ? "output limit reached before the first file finished"
+                : "incomplete build delivery: missing artifact or entry file",
             });
             continue;
           }
@@ -423,6 +570,7 @@ export async function runWithFallback(
       }
       lastError = new Error(`[openrouter:${model}] empty response`);
       onAttempt?.({ model, ok: false, ms: Date.now() - started, error: "empty response" });
+
     } catch (err) {
       if (signal?.aborted) throw err;
       lastError = err;
