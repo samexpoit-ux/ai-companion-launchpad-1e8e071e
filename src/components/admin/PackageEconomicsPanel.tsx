@@ -45,10 +45,10 @@ export function PackageEconomicsPanel({ costPerCredit }: { costPerCredit?: numbe
   return (
     <div className="space-y-5">
       <SectionHeading
-        icon={Coins}
         title="Package break-even"
-        description="Direct sale vs reseller sale for every credit package, from real upstream cost."
+        hint="Direct sale vs reseller sale for every credit package, from real upstream cost."
       />
+
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <label className="block text-xs text-ink-600">
