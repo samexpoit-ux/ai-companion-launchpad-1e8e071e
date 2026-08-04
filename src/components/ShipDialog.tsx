@@ -29,6 +29,9 @@ import {
   type GitHubConnection,
 } from "@/lib/github.functions";
 import { buildShipFiles, slugify, type ShipPayload } from "@/lib/ship-bundle";
+import { GitHubStatusPanel } from "@/components/GitHubStatusPanel";
+import { markPushFailed, markPushStarted, markPushSucceeded } from "@/lib/github-status";
+
 
 export function ShipDialog({
   payload,
