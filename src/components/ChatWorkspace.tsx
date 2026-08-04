@@ -966,7 +966,23 @@ function ChatWorkspaceInner() {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
 
+          {/* Skeleton rows so the rail never looks empty while threads load */}
+          {!hydrated &&
+            [0, 1, 2].map((i) => (
+              <div
+                key={`skeleton-${i}`}
+                className="mb-1 animate-pulse rounded-lg border border-transparent px-3 py-2"
+              >
+                <div className="h-3 w-3/4 rounded bg-ink-100" />
+                <div className="mt-2 h-2 w-1/3 rounded bg-ink-100" />
+              </div>
+            ))}
+          {hydrated && filtered.length === 0 && (
+            <p className="px-3 py-4 text-xs text-ink-500">No projects yet — start a new one.</p>
+          )}
+
           {filtered.map((t) => {
+
             const isRenaming = renamingId === t.id;
             const isActive = t.id === activeId;
             return (
