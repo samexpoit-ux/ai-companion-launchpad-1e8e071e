@@ -309,12 +309,31 @@ export async function callChatCompletion(
   messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
   task: TaskKind = "chat",
   signal?: AbortSignal,
+  /** Hard wall clock for this attempt; defaults to the per-task budget. */
+  timeoutMs?: number,
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number; truncated: boolean }> {
   const isFree = upstreamModel.endsWith(":free");
-  const guard = combineSignals(attemptTimeoutMs(task), signal);
-  let res: Response;
+  // The timeout has to cover the response body too: providers often send
+  // headers fast and then trickle the body for minutes. Clearing the timer
+  // right after `fetch` resolved let single attempts run 4+ minutes.
+  const guard = combineSignals(
+    Math.max(15_000, Math.min(timeoutMs ?? attemptTimeoutMs(task), attemptTimeoutMs(task))),
+    signal,
+  );
+  let data: {
+    choices?: Array<{
+      finish_reason?: string;
+      native_finish_reason?: string;
+      message?: {
+        content?: string;
+        images?: Array<{ image_url?: { url?: string }; type?: string }>;
+      };
+    }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number };
+    error?: { message?: string };
+  };
   try {
-    res = await fetch(`${config.baseURL}/chat/completions`, {
+    const res = await fetch(`${config.baseURL}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -342,18 +361,19 @@ export async function callChatCompletion(
       }),
       signal: guard.signal,
     });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      const err = new Error(`[openrouter:${upstreamModel}] ${res.status} ${text.slice(0, 400)}`);
+      (err as Error & { status?: number }).status = res.status;
+      throw err;
+    }
+
+    data = (await res.json()) as typeof data;
   } finally {
     guard.done();
   }
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    const err = new Error(`[openrouter:${upstreamModel}] ${res.status} ${text.slice(0, 400)}`);
-    (err as Error & { status?: number }).status = res.status;
-    throw err;
-  }
-
-  const data = (await res.json()) as {
     choices?: Array<{
       finish_reason?: string;
       native_finish_reason?: string;
