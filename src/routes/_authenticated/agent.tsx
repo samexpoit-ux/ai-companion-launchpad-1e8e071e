@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bot,
-  Camera,
   Clock,
   KeyRound,
   Loader2,
@@ -20,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { PageBar, PageBody, PageHeader, PageSection, PageShell } from "@/components/page-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { AgentScreenshotGallery } from "@/components/AgentScreenshotGallery";
 import {
   AGENT_APPROVAL_PHRASE,
   AGENT_ATTEMPTS,
