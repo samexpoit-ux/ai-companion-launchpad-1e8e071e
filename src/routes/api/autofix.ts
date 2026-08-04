@@ -7,6 +7,8 @@ import {
   finalizeRequestCost,
 } from "@/lib/credit-guard.server";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
+import { FreePoolError, poolKey } from "@/lib/free-pool.server";
+
 import { newTraceId, recordTrace, type TraceAttempt } from "@/lib/request-trace.server";
 
 interface AutofixBody {
