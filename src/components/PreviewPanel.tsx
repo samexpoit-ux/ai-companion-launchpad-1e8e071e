@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { analyzeStack } from "@/lib/stack";
 import { useGitHubAutoPush } from "@/hooks/useGitHubAutoPush";
 
@@ -27,6 +27,8 @@ import {
   Info,
   ToggleLeft,
   ToggleRight,
+  Search,
+  ChevronDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -40,6 +42,7 @@ import { cn } from "@/lib/utils";
 import { useCredits } from "@/hooks/useCredits";
 import { CreditMeter } from "@/components/CreditMeter";
 import { formatCredits } from "@/lib/credits";
+import { previewRouter } from "@/lib/preview-shims";
 import {
   usePreview,
   FIX_ATTEMPT_CHOICES,
@@ -443,6 +446,8 @@ export function PreviewPanel() {
           data-testid="workspace-stage"
           className="relative h-full w-full overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,0.04),0_24px_60px_-38px_rgba(16,24,40,0.35)]"
         >
+          {tab === "preview" && payload.files ? <PreviewAddressBar files={payload.files} /> : null}
+          <div className={cn("relative h-full", tab === "preview" && payload.files && "pt-11")}>
           <Suspense fallback={<LoadingSkeleton />}>
             {tab === "preview" ? (
               stackReport && !stackReport.webEntry && payload.files ? (
@@ -494,9 +499,87 @@ export function PreviewPanel() {
               <PatchReview />
             </Suspense>
           )}
+          </div>
         </div>
       </div>
     </aside>
+  );
+}
+
+function projectRoutes(files: Record<string, string>): string[] {
+  const routes = new Set<string>(["/"]);
+  const routePattern = /(?:path\s*=\s*["']|path\s*:\s*["'])(\/[A-Za-z0-9_\-/:*]*)/g;
+  for (const source of Object.values(files)) {
+    for (const match of source.matchAll(routePattern)) {
+      if (match[1] && !match[1].includes(":")) routes.add(match[1]);
+    }
+  }
+  return [...routes];
+}
+
+function PreviewAddressBar({ files }: { files: Record<string, string> }) {
+  const currentPath = useSyncExternalStore(
+    previewRouter.subscribe,
+    previewRouter.getPath,
+    previewRouter.getPath,
+  );
+  const [draft, setDraft] = useState(currentPath);
+  const [open, setOpen] = useState(false);
+  const routes = useMemo(() => projectRoutes(files), [files]);
+
+  useEffect(() => setDraft(currentPath), [currentPath]);
+  const go = (path: string) => {
+    previewRouter.navigate(path);
+    setOpen(false);
+  };
+
+  return (
+    <div className="absolute inset-x-0 top-0 z-20 flex h-11 items-center gap-2 border-b border-ink-200 bg-ink-100 px-2">
+      <form
+        className="relative mx-auto flex h-8 w-full max-w-md items-center rounded-lg border border-ink-200 bg-white shadow-sm"
+        onSubmit={(event) => {
+          event.preventDefault();
+          go(draft);
+        }}
+      >
+        <Search className="ml-2 h-3.5 w-3.5 shrink-0 text-ink-400" />
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onFocus={() => setOpen(true)}
+          aria-label="Preview path"
+          className="h-full min-w-0 flex-1 bg-transparent px-2 font-mono text-xs text-ink-800 outline-none"
+          placeholder="Find page or enter path"
+        />
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="mr-1 rounded p-1 text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+          aria-label="Show project pages"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+        {open ? (
+          <div className="absolute left-0 right-0 top-9 max-h-64 overflow-auto rounded-lg border border-ink-200 bg-white p-1 shadow-xl">
+            {routes.map((route) => (
+              <button
+                key={route}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => go(route)}
+                className={cn(
+                  "flex w-full items-center rounded-md px-3 py-2 text-left font-mono text-xs hover:bg-ink-100",
+                  currentPath === route ? "bg-ink-100 font-semibold text-ink-900" : "text-ink-600",
+                )}
+              >
+                {route}
+                {currentPath === route ? <Check className="ml-auto h-3.5 w-3.5" /> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </form>
+    </div>
   );
 }
 

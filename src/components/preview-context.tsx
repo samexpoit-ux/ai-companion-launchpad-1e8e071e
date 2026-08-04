@@ -501,6 +501,18 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     [resetFixState, seedHistory],
   );
 
+  const pushVersion = useCallback(
+    (next: PreviewPayload, label: string, changedPaths: string[], model?: string) => {
+      const id = newVersionId();
+      setVersions((prev) => [
+        ...prev.map((v) => ({ ...v, current: false })),
+        { id, at: Date.now(), label, model, changedPaths, payload: next, current: true },
+      ]);
+      setActiveVersionId(id);
+    },
+    [],
+  );
+
   const applyProjectUpdate = useCallback(
     (project: ArtifactProject) => {
       const current = payloadRef.current;
@@ -530,18 +542,6 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       pushVersion(next, `Build update · ${project.title || "project"}`, changedPaths);
     },
     [openProject, pushVersion, resetFixState],
-  );
-
-  const pushVersion = useCallback(
-    (next: PreviewPayload, label: string, changedPaths: string[], model?: string) => {
-      const id = newVersionId();
-      setVersions((prev) => [
-        ...prev.map((v) => ({ ...v, current: false })),
-        { id, at: Date.now(), label, model, changedPaths, payload: next, current: true },
-      ]);
-      setActiveVersionId(id);
-    },
-    [],
   );
 
   const updateFile = useCallback(

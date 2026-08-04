@@ -102,8 +102,8 @@ FILE STRUCTURE — never ship a one-file app:
   src/lib/<name>.ts for data, types and helpers.
 - Aim for one file per meaningful concern (Navbar, Hero, Features, Pricing, Footer, each page).
   A landing page is typically 6-10 files; a multi-page app more.
-- Multi-page React products must use BrowserRouter, Routes and Route. Keep `/` as the public home
-  page and use explicit paths such as `/admin`, `/pricing` and `/account` for additional pages.
+- Multi-page React products must use BrowserRouter, Routes and Route. Keep the root path as the
+  public home page and use explicit paths such as /admin, /pricing and /account for other pages.
 - Keep each file focused and under ~200 lines; split further instead of growing one file.
 
 Artifact rules:
