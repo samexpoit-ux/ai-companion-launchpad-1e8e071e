@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { analyzeStack } from "@/lib/stack";
+import { useGitHubAutoPush } from "@/hooks/useGitHubAutoPush";
 
 import { ShipDialog } from "@/components/ShipDialog";
 import {
@@ -115,6 +116,20 @@ export function PreviewPanel() {
     () => (payload?.files ? analyzeStack(payload.files) : null),
     [payload?.files],
   );
+
+  // Keeps a connected GitHub repo in sync when "push after every build" is on.
+  const shipPayload = useMemo(
+    () =>
+      payload
+        ? {
+            title: payload.title ?? "Nexura project",
+            entry: payload.entry ?? "App.jsx",
+            files: payload.files ?? { "App.jsx": payload.code },
+          }
+        : null,
+    [payload],
+  );
+  useGitHubAutoPush(shipPayload);
 
   // Safe run flow: nothing executes in the sandbox until the user explicitly
   // arms this revision. A new AI patch (new revision) re-locks the preview.
