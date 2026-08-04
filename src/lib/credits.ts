@@ -60,7 +60,7 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     base: 0.18,
     perKChars: 0.05,
     tier: "code",
-    note: "Claude coding tier when delivery needs it",
+    note: "Top build tier when delivery needs it",
     customerNote: "Highest-quality build engine",
   },
   autofix: {
