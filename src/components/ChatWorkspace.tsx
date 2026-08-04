@@ -116,7 +116,7 @@ import {
 import { PreviewProvider, usePreview, isPreviewable } from "@/components/preview-context";
 import { PreviewPanel } from "@/components/PreviewPanel";
 import { PlayCircle, GripVertical, FolderTree, PanelRight } from "lucide-react";
-import { chatProse, parseArtifacts, type ArtifactProject } from "@/lib/artifact";
+import { chatProse, mergeArtifactProjects, parseArtifacts, type ArtifactProject } from "@/lib/artifact";
 import { ActivityCard, stepsForMessage } from "@/components/ActivityCard";
 
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
@@ -186,6 +186,7 @@ function ChatWorkspaceInner() {
     toggleWorkspace,
     openWorkspace,
     openProject,
+    applyProjectUpdate,
     clearProject,
     setFixIntent,
   } = usePreview();
@@ -443,16 +444,11 @@ function ChatWorkspaceInner() {
   const restoredProjectRef = useRef<string>("");
   useEffect(() => {
     if (!active) return;
-    let project: ArtifactProject | null = null;
-    for (let i = active.messages.length - 1; i >= 0; i -= 1) {
-      const m = active.messages[i];
-      if (m.role !== "assistant") continue;
-      const found = parseArtifacts(m.content)[0];
-      if (found) {
-        project = found;
-        break;
-      }
-    }
+    const project = mergeArtifactProjects(
+      active.messages.flatMap((message) =>
+        message.role === "assistant" ? parseArtifacts(message.content) : [],
+      ),
+    );
     if (!project) {
       // Switching into a conversation that has no build yet must not keep the
       // previous thread's project on screen.
@@ -463,7 +459,9 @@ function ChatWorkspaceInner() {
       }
       return;
     }
-    const signature = `${active.id}:${project.title}:${Object.keys(project.files).join(",")}`;
+    const signature = `${active.id}:${project.title}:${Object.entries(project.files)
+      .map(([path, source]) => `${path}:${source.length}`)
+      .join(",")}`;
     if (restoredProjectRef.current === signature) return;
     restoredProjectRef.current = signature;
     openProject(project);
@@ -692,7 +690,7 @@ function ChatWorkspaceInner() {
         // right-hand live workspace, no extra click.
         const generated = parseArtifacts(reply.content)[0];
         if (generated) {
-          openProject(generated);
+          applyProjectUpdate(generated);
           // Give the repair loop the conversation's intent so a fix keeps the
           // feature the user asked for instead of just silencing the error.
           setFixIntent(

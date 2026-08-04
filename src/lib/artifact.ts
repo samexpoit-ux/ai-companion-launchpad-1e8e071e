@@ -23,6 +23,27 @@ export interface ArtifactProject {
   order: string[];
 }
 
+/** Combine iterative build deliveries without deleting untouched files. */
+export function mergeArtifactProjects(projects: ArtifactProject[]): ArtifactProject | null {
+  if (projects.length === 0) return null;
+  const files: Record<string, string> = {};
+  const order: string[] = [];
+  for (const project of projects) {
+    for (const path of project.order) {
+      if (!(path in files)) order.push(path);
+      files[path] = project.files[path] ?? "";
+    }
+  }
+  const latest = projects[projects.length - 1];
+  return {
+    id: latest.id,
+    title: latest.title,
+    files,
+    order,
+    entry: pickEntry(files, order),
+  };
+}
+
 const ARTIFACT_RE =
   /<(nexusArtifact|boltArtifact)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
 
