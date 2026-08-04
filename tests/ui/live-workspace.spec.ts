@@ -18,10 +18,6 @@ async function box(page: Page, locator: ReturnType<Page["getByTestId"]>) {
 
 test.describe("Live Workspace", () => {
   test("loading /admin never overwrites the / home page", async ({ page }) => {
-    await openWorkspace(page);
-    await openLiveWorkspace(page);
-
-    const composer = page.getByTestId("composer").getByRole("textbox");
     const fullProject = `<nexusArtifact id="route-safe-site" title="Route Safe Site">
 <nexusAction type="file" filePath="src/App.tsx">import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
@@ -30,23 +26,21 @@ export default function App(){ return <BrowserRouter><Routes><Route path="/" ele
 <nexusAction type="file" filePath="src/pages/Home.tsx">export default function Home(){ return <main><h1>Permanent Home Page</h1><p>Public website remains intact.</p></main> }</nexusAction>
 <nexusAction type="file" filePath="src/pages/Admin.tsx">export default function Admin(){ return <main><h1>Private Admin Dashboard</h1><p>Admin route is isolated.</p></main> }</nexusAction>
 </nexusArtifact>`;
+    await installMockBackend(page, {
+      content: fullProject,
+      model: "ui-test/mock-model",
+      tokens: 128,
+      latencyMs: 10,
+      credits: { charged: 1, remaining: 456, total: 500, used: 44, plan: "pro" },
+    });
+    await openWorkspace(page);
+    await openLiveWorkspace(page);
 
-    await page.route("**/api/chat", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          content: fullProject,
-          model: "ui-test/mock-model",
-          tokens: 128,
-          latencyMs: 10,
-          credits: { charged: 1, remaining: 456, total: 500, used: 44, plan: "pro" },
-        }),
-      }),
-    );
-
+    const composer = page.getByPlaceholder("Ask Nexura to build something…");
     await composer.fill("Add an admin dashboard as a separate route");
-    await page.getByRole("button", { name: "Send message" }).click();
+    const send = page.getByRole("button", { name: "Send message" });
+    await expect(send).toBeEnabled();
+    await send.click();
     const frame = page.frameLocator('iframe[title="Live preview"]');
     await expect(frame.getByRole("heading", { name: "Permanent Home Page" })).toBeVisible({
       timeout: 20_000,
