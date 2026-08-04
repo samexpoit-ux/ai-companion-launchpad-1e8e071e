@@ -4,8 +4,8 @@
  * Three routes, all from the live workspace: download a runnable zip, push
  * straight into a GitHub repository, or take a build bundle to a VPS/host.
  */
-import { useState } from "react";
-import { FileArchive, Github, Rocket, Loader2, Check, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FileArchive, Github, Rocket, Loader2, Check, ExternalLink, Unplug } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import {
   Dialog,
@@ -18,21 +18,50 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { pushProjectToGitHub } from "@/lib/ship.functions";
+import {
+  connectGitHub,
+  disconnectGitHub,
+  getGitHubConnection,
+  pushToConnectedRepo,
+  setGitHubAutoPush,
+  type GitHubConnection,
+} from "@/lib/github.functions";
 import { buildShipFiles, slugify, type ShipPayload } from "@/lib/ship-bundle";
 
 export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; trigger: React.ReactNode }) {
-  const push = useServerFn(pushProjectToGitHub);
+  const connect = useServerFn(connectGitHub);
+  const push = useServerFn(pushToConnectedRepo);
+  const disconnect = useServerFn(disconnectGitHub);
+  const readConnection = useServerFn(getGitHubConnection);
+  const toggleAuto = useServerFn(setGitHubAutoPush);
+
   const [zipping, setZipping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState("");
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState(slugify(payload?.title));
+  const [connection, setConnection] = useState<GitHubConnection | null>(null);
   const [result, setResult] = useState<{ repoUrl: string; branch: string; commit: string; files: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let mounted = true;
+    void readConnection({})
+      .then((c) => {
+        if (mounted) setConnection(c);
+      })
+      .catch(() => {
+        if (mounted) setConnection({ connected: false });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [readConnection]);
+
   const fileCount = payload ? Object.keys(payload.files).length : 0;
+
 
   const downloadZip = async () => {
     if (!payload) return;
