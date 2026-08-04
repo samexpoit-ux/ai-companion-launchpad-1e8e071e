@@ -3,6 +3,7 @@
 // preview runs). Lint = a small set of high-signal static checks.
 
 import { resolveAlias, resolveModule } from "@/lib/artifact";
+import { REAL_MODULES } from "@/lib/preview-externals";
 
 export type IssueLevel = "error" | "warning";
 
@@ -49,10 +50,10 @@ const IMPORT_RE = /(?:^|\n)\s*import\s+(?:[^'"]*?from\s*)?["']([^"']+)["']/g;
 const REQUIRE_RE = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
 
 function isPreviewExternal(id: string) {
-  if (EXTERNAL_MODULES.has(id)) return true;
+  if (EXTERNAL_MODULES.has(id) || id in REAL_MODULES) return true;
   // sub-path imports of shimmed packages resolve to the same shim in the sandbox
   const base = id.split("/")[0];
-  return EXTERNAL_MODULES.has(base);
+  return EXTERNAL_MODULES.has(base) || base in REAL_MODULES;
 }
 
 function lineOf(source: string, index: number) {

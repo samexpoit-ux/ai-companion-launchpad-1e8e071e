@@ -128,6 +128,34 @@ const EXTERNALS: Record<string, unknown> = {
   ...REAL_MODULES,
 };
 
+const ASSET_RE = /\.(svg|png|jpe?g|webp|gif|avif|ico|woff2?|ttf|otf)$/i;
+
+/**
+ * Generated artifacts usually represent imported assets as a URL/data URL or
+ * as raw SVG. They are values, not JavaScript modules. Treating their contents
+ * as source code was the main cause of otherwise-correct projects failing as
+ * soon as a logo, screenshot or local font was added.
+ */
+function assetModule(path: string, source: string): Record<string, unknown> {
+  const trimmed = source.trim();
+  let value = trimmed;
+  if (/\.svg$/i.test(path) && trimmed.startsWith("<svg")) {
+    value = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(trimmed)}`;
+  } else if (!/^(data:|blob:|https?:\/\/|\/)/i.test(trimmed)) {
+    const mime = /\.png$/i.test(path)
+      ? "image/png"
+      : /\.jpe?g$/i.test(path)
+        ? "image/jpeg"
+        : /\.webp$/i.test(path)
+          ? "image/webp"
+          : /\.gif$/i.test(path)
+            ? "image/gif"
+            : "application/octet-stream";
+    value = `data:${mime};base64,${trimmed.replace(/\s+/g, "")}`;
+  }
+  return { default: value, src: value };
+}
+
 /** Resolve a bare package id (including sub-paths) to a shimmed module. */
 function resolveExternal(id: string): unknown | undefined {
   const normalized = id.trim().replace(/\/$/, "");
@@ -282,6 +310,11 @@ function runProject(
       cache.set(path, parsed);
       return parsed;
     }
+    if (ASSET_RE.test(path)) {
+      const asset = assetModule(path, source);
+      cache.set(path, asset);
+      return asset;
+    }
     // Markup, docs, config and other non-JS files are not modules: importing one
     // used to hand raw HTML to Babel and fail the entire build.
     if (/\.(html?|md|mdx|txt|ya?ml|toml|lock|env)$/i.test(path)) {
@@ -300,7 +333,8 @@ function runProject(
       if (external !== undefined) return external;
       const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
       if (resolved) return load(resolved);
-      if (/\.(css|scss|sass|less|svg|png|jpe?g|webp|gif)$/.test(id)) return {};
+       if (/\.(css|scss|sass|less)$/.test(id)) return {};
+       if (ASSET_RE.test(id)) return { default: id, src: id };
       // A missing sibling file (or an unbundled package) is a placeholder, not
       // a dead preview: the rest of the project still renders.
       console.info(
