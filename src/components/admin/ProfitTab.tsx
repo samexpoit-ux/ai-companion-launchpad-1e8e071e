@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchUsageReport, type UsageReport } from "@/lib/admin-api";
-import { formatUsd } from "@/lib/credit-ledger";
 import { formatCredits } from "@/lib/credits";
 import { DEFAULT_PRICE_PER_CREDIT, profitSummary, type ProfitRow } from "@/lib/profit";
 import { useCurrency } from "@/components/admin/currency";
@@ -287,6 +286,7 @@ function ProfitPanel({
   loading: boolean;
   showRank?: boolean;
 }) {
+  const { money } = useCurrency();
   const max = Math.max(...rows.map((r) => r.revenueUsd), 0.000001);
 
   return (
@@ -323,7 +323,7 @@ function ProfitPanel({
                 </div>
                 <div className="ml-auto flex shrink-0 items-baseline gap-2">
                   <span className="font-mono text-sm font-semibold text-ink-900">
-                    {formatUsd(row.profitUsd)}
+                    {money(row.profitUsd)}
                   </span>
                   <Pill tone={row.marginPct >= 66 ? "good" : row.marginPct >= 33 ? "warn" : "bad"}>
                     {row.marginPct}%
@@ -342,8 +342,8 @@ function ProfitPanel({
               </div>
 
               <dl className="mt-2 grid grid-cols-4 gap-2 text-2xs text-ink-500">
-                <Metric label="revenue" value={formatUsd(row.revenueUsd)} />
-                <Metric label="cost" value={formatUsd(row.costUsd)} />
+                <Metric label="revenue" value={money(row.revenueUsd)} />
+                <Metric label="cost" value={money(row.costUsd)} />
                 <Metric label="credits" value={formatCredits(row.credits)} />
                 <Metric label="requests" value={String(row.requests)} />
               </dl>
