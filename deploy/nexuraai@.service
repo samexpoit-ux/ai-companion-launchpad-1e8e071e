@@ -1,0 +1,30 @@
+[Unit]
+# Templated instance of the SSR server: nexuraai@3001 listens on port 3001.
+# Nginx load-balances across all enabled instances (see nginx-nexuraai.conf),
+# which is how the 12-core / 48 GB VPS uses more than one CPU core.
+Description=Nexura AI SSR worker on port %i
+After=network.target
+
+[Service]
+Type=simple
+User=nexuraai
+Group=nexuraai
+WorkingDirectory=/var/www/nexuraai
+EnvironmentFile=/etc/nexuraai.env
+EnvironmentFile=-/var/www/nexuraai/.env
+
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=%i
+# ~4 GB heap per worker keeps 8 workers well inside 48 GB.
+Environment=NODE_OPTIONS=--max-old-space-size=4096
+ExecStart=/usr/bin/node /var/www/nexuraai/.output/server/index.mjs
+Restart=always
+RestartSec=2
+# Restart one worker at a time; nginx keeps serving from the others.
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
