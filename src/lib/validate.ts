@@ -59,8 +59,22 @@ function lineOf(source: string, index: number) {
   return source.slice(0, index).split("\n").length;
 }
 
+/**
+ * Build/tooling files (vite.config.ts, tailwind.config.js, server entries, tests…)
+ * never execute inside the sandbox iframe, so their npm imports are not preview
+ * problems. Flagging them produced false "N errors" badges on perfectly good
+ * projects, so their package imports are informational only.
+ */
+const TOOLING_RE =
+  /(^|\/)(vite|vitest|tailwind|postcss|rollup|webpack|next|babel|jest|eslint|prettier|svelte|astro|nuxt|drizzle|playwright)\.config\.[cm]?[jt]sx?$|(^|\/)(server|middleware)\.[cm]?[jt]sx?$|\.(test|spec)\.[cm]?[jt]sx?$|\.d\.ts$/;
+
+function isToolingFile(path: string) {
+  return TOOLING_RE.test(path);
+}
+
 function lintFile(path: string, source: string, files: Record<string, string>): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const tooling = isToolingFile(path);
   const push = (level: IssueLevel, message: string, index?: number) =>
     issues.push({ level, path, message, source: "lint", line: index != null ? lineOf(source, index) : undefined });
 
@@ -74,10 +88,11 @@ function lintFile(path: string, source: string, files: Record<string, string>): 
       if (isPreviewExternal(id) || STYLE_RE.test(id)) continue;
       if (id.startsWith(".") || id.startsWith("@/") || id.startsWith("/")) {
         const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
-        if (!resolved) push("error", `Cannot resolve import "${id}"`, m.index);
-      } else {
+        if (!resolved) push(tooling ? "warning" : "error", `Cannot resolve import "${id}"`, m.index);
+      } else if (!tooling) {
         push("error", `Package "${id}" is not available in the live preview`, m.index);
       }
+
       if (seen.has(id)) push("warning", `Duplicate import of "${id}"`, m.index);
       seen.add(id);
     }
