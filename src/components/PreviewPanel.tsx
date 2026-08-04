@@ -29,6 +29,7 @@ import {
   ToggleRight,
   Search,
   ChevronDown,
+  Stethoscope,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -68,6 +69,8 @@ const ErrorOverlay = lazy(() => import("./ErrorOverlay"));
 const StackPreview = lazy(() => import("./StackPreview"));
 // Lovable-style "Details" trajectory view (timeline + changed files).
 const TimelinePanel = lazy(() => import("./TimelinePanel"));
+// Build status + asset validation + console + auto-fix trail in one place.
+const PreviewDiagnostics = lazy(() => import("./PreviewDiagnostics"));
 
 export function PreviewPanel() {
   const {
@@ -192,7 +195,7 @@ export function PreviewPanel() {
     >
       {/* Header — Lovable-style single row: segmented tabs left, viewport + actions right */}
       <div className="flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b border-ink-200 bg-white px-2 sm:px-3">
-        <div className="flex min-w-0 shrink items-center gap-0.5 rounded-full border border-ink-200 bg-ink-100 p-0.5 sm:gap-1">
+        <div className="flex min-w-0 shrink items-center gap-0.5 overflow-x-auto rounded-full border border-ink-200 bg-ink-100 p-0.5 [scrollbar-width:none] sm:gap-1 [&::-webkit-scrollbar]:hidden">
           <TabBtn
             active={tab === "preview"}
             onClick={() => setTab("preview")}
@@ -210,6 +213,12 @@ export function PreviewPanel() {
             onClick={() => setTab("console")}
             icon={Terminal}
             label="Console"
+          />
+          <TabBtn
+            active={tab === "diagnostics"}
+            onClick={() => setTab("diagnostics")}
+            icon={Stethoscope}
+            label="Diagnostics"
           />
           {stackReport?.hasBackend && (
             <TabBtn
@@ -464,6 +473,8 @@ export function PreviewPanel() {
               )
             ) : tab === "stack" && payload.files ? (
               <StackPreview key={`stack-tab-${revision}`} files={payload.files} />
+            ) : tab === "diagnostics" ? (
+              <PreviewDiagnostics />
             ) : tab === "console" ? (
               <PreviewConsole entries={consoleEntries} onClear={clearConsole} />
             ) : tab === "code" && payload.files ? (
@@ -799,7 +810,7 @@ function TabBtn({
       )}
     >
       <Icon className="h-3 w-3 shrink-0" />
-      <span className="hidden sm:inline">{label}</span>
+      <span className="hidden md:inline">{label}</span>
     </button>
   );
 }

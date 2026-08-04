@@ -19,6 +19,8 @@
     "test:composer": "bash scripts/test-composer-mobile.sh",
     "test:composer:update": "bash scripts/test-composer-mobile.sh --update",
     "test:workspace": "playwright test tests/ui/live-workspace.spec.ts",
+    "test:visual": "playwright test tests/ui/visual-regression.spec.ts",
+    "test:visual:update": "playwright test tests/ui/visual-regression.spec.ts --update-snapshots",
     "deploy": "ssh ${VPS_USER:-root}@${VPS_HOST:-169.58.105.190} \"bash /var/www/nexuraai/deploy/deploy.sh\"",
     "git:deploy": "bash deploy/git-deploy.sh"
   },
