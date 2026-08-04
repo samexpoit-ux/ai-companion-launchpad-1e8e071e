@@ -84,9 +84,12 @@ export const Route = createFileRoute("/api/chat")({
             ? ("reason" as const)
             : mode === "chat"
               ? ("chat" as const)
-              : mode === "build"
-                ? ("code" as const)
-                : undefined;
+              : mode === "image"
+                ? ("image" as const)
+                : mode === "build"
+                  ? ("code" as const)
+                  : undefined;
+
         const traceId = newTraceId();
         const threadId = typeof body.threadId === "string" ? body.threadId : null;
         const attempts: TraceAttempt[] = [];
