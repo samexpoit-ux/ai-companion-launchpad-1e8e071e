@@ -160,7 +160,9 @@ function AgentPage() {
 
   useEffect(() => {
     void load();
-    void agentRuntimeStatus().then(setRuntime).catch(() => setRuntime(null));
+    void agentRuntimeStatus()
+      .then(setRuntime)
+      .catch(() => setRuntime(null));
   }, [load]);
 
   // While a run is live, poll so the status/timeline advance without a refresh.
@@ -461,8 +463,8 @@ function CredentialForm({ onSaved, disabled }: { onSaved: () => void; disabled?:
       </label>
       <p className="sm:col-span-2 flex items-start gap-2 text-xs text-ink-500">
         <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        Encrypted with AES-256-GCM before it reaches the database. It is decrypted only for a run you
-        personally approve, and never appears in logs or the audit trail.
+        Encrypted with AES-256-GCM before it reaches the database. It is decrypted only for a run
+        you personally approve, and never appears in logs or the audit trail.
       </p>
       <div className="flex gap-2 sm:col-span-2">
         <Button type="submit" size="sm" disabled={saving}>
@@ -592,7 +594,11 @@ function RequestForm({
       </label>
       <div className="sm:col-span-2">
         <Button type="submit" size="sm" disabled={saving}>
-          {saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Bot className="mr-1.5 h-4 w-4" />}
+          {saving ? (
+            <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+          ) : (
+            <Bot className="mr-1.5 h-4 w-4" />
+          )}
           Queue run for approval
         </Button>
       </div>
@@ -721,7 +727,10 @@ function SessionCard({
               </h4>
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 {shots.map((shot) => (
-                  <figure key={shot.id} className="overflow-hidden rounded-lg border border-ink-200 bg-white">
+                  <figure
+                    key={shot.id}
+                    className="overflow-hidden rounded-lg border border-ink-200 bg-white"
+                  >
                     <img
                       src={shot.data_url}
                       alt={shot.caption ?? `Agent screenshot (${shot.kind})`}
@@ -842,7 +851,11 @@ function ApprovalDialog({
             Cancel
           </Button>
           <Button size="sm" disabled={!ready || busy} onClick={() => onConfirm(confirmation, note)}>
-            {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-1.5 h-4 w-4" />}
+            {busy ? (
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="mr-1.5 h-4 w-4" />
+            )}
             Approve and start
           </Button>
         </div>

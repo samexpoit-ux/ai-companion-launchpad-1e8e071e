@@ -312,7 +312,10 @@ export const approveAgentSession = createServerFn({ method: "POST" })
         credits_charged: totalCharged,
       })
       .eq("id", row.id);
-    await supabaseAdmin.from("agent_credentials").update({ last_used_at: new Date().toISOString() }).eq("id", row.credential_id ?? "");
+    await supabaseAdmin
+      .from("agent_credentials")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", row.credential_id ?? "");
 
     return {
       status: result.status,

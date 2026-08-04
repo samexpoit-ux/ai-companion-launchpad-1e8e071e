@@ -40,10 +40,7 @@ async function cryptoKey(): Promise<CryptoKey> {
   }
   // Hash to exactly 256 bits so any passphrase length works.
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
-  return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, [
-    "encrypt",
-    "decrypt",
-  ]);
+  return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 const toB64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");

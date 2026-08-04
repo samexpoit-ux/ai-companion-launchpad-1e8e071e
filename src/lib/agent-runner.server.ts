@@ -356,7 +356,9 @@ export async function runAgentSession(db: AnyClient, input: RunnerInput): Promis
       await rec.screenshot(
         live.page,
         "failure",
-        timedOut ? "State when the attempt timed out" : `State when the attempt failed: ${lastError}`,
+        timedOut
+          ? "State when the attempt timed out"
+          : `State when the attempt failed: ${lastError}`,
       );
       await rec.log({
         kind: "error",
