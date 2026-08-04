@@ -187,34 +187,79 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
           </TabsContent>
 
           <TabsContent value="github" className="space-y-3 pt-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="gh-token">Personal access token (repo scope)</Label>
-              <Input
-                id="gh-token"
-                type="password"
-                autoComplete="off"
-                placeholder="ghp_…"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Used once for this push and never stored.
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="gh-owner">Owner / org (optional)</Label>
-                <Input id="gh-owner" placeholder="your-username" value={owner} onChange={(e) => setOwner(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="gh-repo">Repository</Label>
-                <Input id="gh-repo" value={repo} onChange={(e) => setRepo(e.target.value)} />
-              </div>
-            </div>
-            <Button onClick={() => void doPush()} disabled={!payload || busy || token.trim().length < 20} className="w-full">
-              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
-              {busy ? "Pushing…" : "Create repo & push"}
-            </Button>
+            {connection?.connected ? (
+              <>
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">Connected as {connection.login}</p>
+                  <a
+                    href={connection.repoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-0.5 inline-flex items-center gap-1 text-primary underline"
+                  >
+                    {connection.owner}/{connection.repo} · {connection.branch}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                  {connection.lastPushedAt && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Last push {new Date(connection.lastPushedAt).toLocaleString()}
+                      {connection.lastCommit ? ` (${connection.lastCommit})` : ""}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
+                  <div>
+                    <Label htmlFor="gh-auto" className="text-sm">Push after every build</Label>
+                    <p className="text-xs text-muted-foreground">Keep the repo in sync automatically.</p>
+                  </div>
+                  <Switch
+                    id="gh-auto"
+                    checked={Boolean(connection.autoPush)}
+                    onCheckedChange={(v) => void doToggleAuto(v)}
+                  />
+                </div>
+                <Button onClick={() => void doPush()} disabled={!payload || busy} className="w-full">
+                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
+                  {busy ? "Pushing…" : "Push latest files"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => void doDisconnect()} disabled={busy} className="w-full">
+                  <Unplug className="mr-2 h-4 w-4" />
+                  Disconnect repository
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label htmlFor="gh-token">Personal access token (repo scope)</Label>
+                  <Input
+                    id="gh-token"
+                    type="password"
+                    autoComplete="off"
+                    placeholder="ghp_…"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Stored encrypted on the server so later pushes are one click. Never exposed to the browser.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-owner">Owner / org (optional)</Label>
+                    <Input id="gh-owner" placeholder="your-username" value={owner} onChange={(e) => setOwner(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-repo">Repository</Label>
+                    <Input id="gh-repo" value={repo} onChange={(e) => setRepo(e.target.value)} />
+                  </div>
+                </div>
+                <Button onClick={() => void doConnect()} disabled={!payload || busy || token.trim().length < 20} className="w-full">
+                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
+                  {busy ? "Connecting…" : "Connect repo & push"}
+                </Button>
+              </>
+            )}
+
             {error && <p className="text-sm text-destructive">{error}</p>}
             {result && (
               <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
