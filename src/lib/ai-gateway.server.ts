@@ -493,7 +493,9 @@ export async function runWithFallback(
               ],
               route.task,
               signal,
+              remaining(),
             );
+
             out = {
               content: `${out.content}${next.content}`,
               tokens: out.tokens + next.tokens,
