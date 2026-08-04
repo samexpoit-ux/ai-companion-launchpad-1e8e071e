@@ -192,12 +192,20 @@ function compileModule(path: string, source: string) {
   const hit = buildCache.get(key);
   if (hit !== undefined) return hit;
 
-  const out =
-    transform(source, {
-      filename: path,
-      presets: [["react", { runtime: "classic" }], "typescript"],
-      plugins: ["transform-modules-commonjs"],
-    }).code ?? "";
+  let out = "";
+  try {
+    out =
+      transform(source, {
+        filename: path,
+        presets: [["react", { runtime: "classic" }], "typescript"],
+        plugins: ["transform-modules-commonjs"],
+      }).code ?? "";
+  } catch (err) {
+    // Surface the offending file and location: a bare Babel message ("Unexpected
+    // token (12:4)") gave the auto-fixer nothing to work with.
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`${path}: ${message.replace(/^unknown(\sfile)?:\s*/i, "")}`);
+  }
 
   if (buildCache.size >= BUILD_CACHE_MAX) {
     // Simple FIFO eviction — the working set is one project at a time.
@@ -207,6 +215,7 @@ function compileModule(path: string, source: string) {
   buildCache.set(key, out);
   return out;
 }
+
 
 /**
  * Warm the heavy, shared parts of the preview runtime (Tailwind compiler, web
