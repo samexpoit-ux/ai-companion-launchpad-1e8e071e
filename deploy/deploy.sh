@@ -46,7 +46,21 @@ bash "$APP_DIR/deploy/verify-schema.sh"
 
 chown -R nexuraai:nexuraai "$APP_DIR"
 
-systemctl restart nexuraai
-sleep 2
-systemctl --no-pager status nexuraai | head -n 15
+# Restart whichever topology is installed: the multi-worker cluster
+# (deploy/scale-cluster.sh) restarts one worker at a time so nginx can keep
+# serving from the others; otherwise fall back to the single unit.
+WORKER_UNITS="$(systemctl list-units --plain --no-legend 'nexuraai@*.service' | awk '{print $1}')"
+if [ -n "$WORKER_UNITS" ]; then
+  for unit in $WORKER_UNITS; do
+    echo "==> restarting $unit"
+    systemctl restart "$unit"
+    sleep 1
+  done
+else
+  systemctl restart nexuraai
+  sleep 2
+  systemctl --no-pager status nexuraai | head -n 15
+fi
+
 curl -sS -o /dev/null -w "local health: %{http_code}\n" http://127.0.0.1:3000/
+
