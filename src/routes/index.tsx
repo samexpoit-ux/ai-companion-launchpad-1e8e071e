@@ -204,7 +204,10 @@ function LandingPage() {
               Pricing
             </a>
             <Button asChild size="sm">
-              <Link to="/auth">Start free</Link>
+              <Link to={signedIn ? "/dashboard" : "/auth"}>
+                {signedIn ? "Open workspace" : "Start free"}
+              </Link>
+
             </Button>
           </nav>
         </div>
