@@ -133,7 +133,7 @@ export function ActivityCard({
       <div className="flex items-center gap-2 border-t border-ink-200/70 px-3 py-2">
         <button
           type="button"
-          onClick={showDetails}
+          onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           data-testid="activity-details"
           className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 text-xs font-medium text-ink-700 transition hover:border-ink-300 hover:text-ink-900"
@@ -141,11 +141,22 @@ export function ActivityCard({
           <ListTree className="h-3.5 w-3.5" />
           Details
           <ChevronDown
-            className={cn(
-              "h-3.5 w-3.5 text-ink-400 transition-transform",
-              (open || detailsOpen) && "rotate-180",
-            )}
+            className={cn("h-3.5 w-3.5 text-ink-400 transition-transform", open && "rotate-180")}
           />
+        </button>
+        <button
+          type="button"
+          onClick={showDetails}
+          title="Open this turn in the side timeline"
+          aria-label="Open this turn in the side timeline"
+          className={cn(
+            "hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-ink-500 transition hover:text-ink-900 md:inline-flex",
+            detailsOpen
+              ? "border-[color:var(--color-iris)]/45 bg-[color:var(--color-iris)]/10 text-ink-900"
+              : "border-ink-200 bg-white hover:border-ink-300",
+          )}
+        >
+          <PanelRight className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
@@ -164,29 +175,67 @@ export function ActivityCard({
       </div>
 
       {open && (
-        <ol className="border-t border-ink-200/70 bg-ink-100/50 px-3.5 py-3 text-xs">
-          {steps.length === 0 && (
-            <li className="text-ink-500">No activity recorded for this turn.</li>
+        <div className="space-y-2 border-t border-ink-200/70 bg-ink-100/50 px-3 py-3 text-xs">
+          <Disclosure
+            icon={<BrainCircuit className="h-3.5 w-3.5 text-[color:var(--color-iris)]" />}
+            title="How this was thought through"
+            meta={`${steps.length} step${steps.length === 1 ? "" : "s"}`}
+            defaultOpen
+          >
+            {steps.length === 0 ? (
+              <p className="text-ink-500">No activity recorded for this turn.</p>
+            ) : (
+              <ol className="space-y-1">
+                {steps.map((s, i) => (
+                  <li key={`${s.label}-${i}`} className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-iris)]/70" />
+                    <span className="min-w-0">
+                      <span className="font-medium text-ink-800">{s.label}</span>
+                      {s.detail && (
+                        <span className="ml-1.5 break-words font-mono text-2xs text-ink-500">
+                          {s.detail}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Disclosure>
+
+          {project && (
+            <Disclosure
+              icon={<FileCode2 className="h-3.5 w-3.5 text-[color:var(--color-iris)]" />}
+              title="Edited files"
+              meta={`${project.order.length} file${project.order.length === 1 ? "" : "s"}`}
+            >
+              <ul className="max-h-44 overflow-auto">
+                {project.order.map((path) => (
+                  <li key={path}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openProject(project);
+                        setTab("code");
+                      }}
+                      className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left font-mono text-2xs leading-5 text-ink-600 transition hover:bg-white hover:text-ink-900"
+                      title={`Open ${path} in the code view`}
+                    >
+                      <FileCode2 className="h-3 w-3 shrink-0 text-ink-400" />
+                      <span className="truncate">{path}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Disclosure>
           )}
-          {steps.map((s, i) => (
-            <li key={`${s.label}-${i}`} className="flex gap-2 py-1">
-              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[color:var(--color-iris)]/70" />
-              <span className="min-w-0">
-                <span className="font-medium text-ink-800">{s.label}</span>
-                {s.detail && (
-                  <span className="ml-1.5 break-words font-mono text-2xs text-ink-500">
-                    {s.detail}
-                  </span>
-                )}
-              </span>
-            </li>
-          ))}
+
           {charge && (
-            <li className="mt-2 border-t border-ink-200/70 pt-2">
-              <div className="mb-1 flex items-center gap-1.5 font-medium text-ink-800">
-                <Coins className="h-3.5 w-3.5 text-[color:var(--color-iris)]" />
-                Credits used and why
-              </div>
+            <Disclosure
+              icon={<Coins className="h-3.5 w-3.5 text-[color:var(--color-iris)]" />}
+              title="Credits used and why"
+              meta={charge.credits != null ? formatCredits(charge.credits) : undefined}
+            >
               <ul className="space-y-1">
                 {chargeLines(charge).map((line: ChargeLine) => (
                   <li key={line.label} className="flex gap-2">
@@ -211,28 +260,49 @@ export function ActivityCard({
                   </li>
                 )}
               </ul>
-            </li>
+            </Disclosure>
           )}
-          {project && (
-            <li className="mt-2 border-t border-ink-200/70 pt-2">
-              <div className="mb-1 flex items-center gap-1.5 font-medium text-ink-800">
-                <FileCode2 className="h-3.5 w-3.5 text-[color:var(--color-iris)]" />
-                {project.order.length} file{project.order.length > 1 ? "s" : ""}
-              </div>
-              <ul className="max-h-36 overflow-auto">
-                {project.order.map((p) => (
-                  <li key={p} className="truncate font-mono text-2xs leading-5 text-ink-600">
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </li>
-          )}
-        </ol>
+        </div>
       )}
     </div>
   );
 }
+
+/** Collapsible sub-section inside a turn card's inline details. */
+function Disclosure({
+  icon,
+  title,
+  meta,
+  defaultOpen = false,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  meta?: string | undefined;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="overflow-hidden rounded-lg border border-ink-200 bg-white/80">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-2.5 py-2 text-left transition hover:bg-ink-100/60"
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate font-medium text-ink-800">{title}</span>
+        {meta ? <span className="shrink-0 text-2xs text-ink-500">{meta}</span> : null}
+        <ChevronDown
+          className={cn("h-3.5 w-3.5 shrink-0 text-ink-400 transition-transform", open && "rotate-180")}
+        />
+      </button>
+      {open ? <div className="border-t border-ink-200/70 px-2.5 py-2">{children}</div> : null}
+    </div>
+  );
+}
+
 
 /** Builds the Details timeline for a completed assistant turn. */
 export function stepsForMessage(opts: {
