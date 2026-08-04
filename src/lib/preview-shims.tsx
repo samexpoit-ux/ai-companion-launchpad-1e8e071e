@@ -16,6 +16,30 @@ interface RouterCtx {
   params: Record<string, string>;
 }
 
+type PathListener = () => void;
+let previewPath = "/";
+const pathListeners = new Set<PathListener>();
+
+/** Shared address state used by generated routers and the preview path bar. */
+export const previewRouter = {
+  getPath: () => previewPath,
+  subscribe: (listener: PathListener) => {
+    pathListeners.add(listener);
+    return () => pathListeners.delete(listener);
+  },
+  navigate: (to: string) => {
+    const raw = String(to || "/").trim();
+    const next = raw.startsWith("/") ? raw : `/${raw}`;
+    if (next === previewPath) return;
+    previewPath = next;
+    pathListeners.forEach((listener) => listener());
+  },
+  reset: () => {
+    previewPath = "/";
+    pathListeners.forEach((listener) => listener());
+  },
+};
+
 const RouterContext = React.createContext<RouterCtx | null>(null);
 
 function useRouter(): RouterCtx {
@@ -35,14 +59,20 @@ function MemoryRouter({
   children?: React.ReactNode;
   initialEntries?: string[];
 }) {
-  const [path, setPath] = React.useState(initialEntries?.[0] ?? "/");
+  const initial = initialEntries?.[0];
+  React.useEffect(() => {
+    if (initial && previewRouter.getPath() === "/") previewRouter.navigate(initial);
+  }, [initial]);
+  const path = React.useSyncExternalStore(
+    previewRouter.subscribe,
+    previewRouter.getPath,
+    previewRouter.getPath,
+  );
   const value = React.useMemo<RouterCtx>(
     () => ({
       path,
       params: {},
-      navigate: (to: string) => {
-        if (typeof to === "string") setPath(to.startsWith("/") ? to : `/${to}`);
-      },
+      navigate: previewRouter.navigate,
     }),
     [path],
   );

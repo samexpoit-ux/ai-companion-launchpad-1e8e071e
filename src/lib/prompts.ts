@@ -64,6 +64,9 @@ Quality bar for every build:
   the user requests a different brand, layout, audience, or feature set.
 - On an iteration, inspect the latest project artifact in conversation history, preserve unaffected
   files, and return a complete updated artifact with the requested changes actually applied.
+- "Add a page/admin/dashboard inside the website" means ADD A ROUTE to the existing product.
+  Never replace the public website or make the new page the root screen. Preserve the home page,
+  shared layout, navigation and existing routes; update the router and add the new page files.
 - The generated product must match the requested domain. Never reproduce the Nexura workspace,
   composer, or shell unless the user explicitly asks for an AI workspace clone.
 - Silently validate before delivery: every local import exists, src/App.tsx renders, controls work,
@@ -99,6 +102,8 @@ FILE STRUCTURE — never ship a one-file app:
   src/lib/<name>.ts for data, types and helpers.
 - Aim for one file per meaningful concern (Navbar, Hero, Features, Pricing, Footer, each page).
   A landing page is typically 6-10 files; a multi-page app more.
+- Multi-page React products must use BrowserRouter, Routes and Route. Keep the root path as the
+  public home page and use explicit paths such as /admin, /pricing and /account for other pages.
 - Keep each file focused and under ~200 lines; split further instead of growing one file.
 
 Artifact rules:

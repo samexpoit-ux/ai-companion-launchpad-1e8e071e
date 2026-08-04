@@ -165,6 +165,7 @@ interface PreviewContextValue {
   setDevice: (d: PreviewDevice) => void;
   openPreview: (code: string, rawLang: string) => void;
   openProject: (project: ArtifactProject) => void;
+  applyProjectUpdate: (project: ArtifactProject) => void;
   /** Empty the workspace (used when switching to a conversation with no build yet). */
   clearProject: () => void;
   /** Opens the split workspace panel even when nothing has been generated yet. */
@@ -510,6 +511,37 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
       setActiveVersionId(id);
     },
     [],
+  );
+
+  const applyProjectUpdate = useCallback(
+    (project: ArtifactProject) => {
+      const current = payloadRef.current;
+      if (!current?.files) {
+        openProject(project);
+        return;
+      }
+      const files = { ...current.files, ...project.files };
+      const entry = current.entry && current.entry in files ? current.entry : project.entry;
+      const code = files[entry] ?? current.code;
+      const changedPaths = project.order.filter((path) => current.files?.[path] !== project.files[path]);
+      const next: PreviewPayload = {
+        ...current,
+        files,
+        entry,
+        code,
+        title: project.title || current.title,
+        lang: smartDetect(code, entry.endsWith(".tsx") || entry.endsWith(".ts") ? "tsx" : "jsx"),
+      };
+      setPayload(next);
+      setActiveFile(changedPaths[0] ?? entry);
+      setIsOpen(true);
+      setTimeline(null);
+      setTab("preview");
+      setRevision((r) => r + 1);
+      resetFixState();
+      pushVersion(next, `Build update · ${project.title || "project"}`, changedPaths);
+    },
+    [openProject, pushVersion, resetFixState],
   );
 
   const updateFile = useCallback(
@@ -964,6 +996,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
         setDevice,
         openPreview,
         openProject,
+        applyProjectUpdate,
         clearProject,
         openWorkspace,
         toggleWorkspace,
