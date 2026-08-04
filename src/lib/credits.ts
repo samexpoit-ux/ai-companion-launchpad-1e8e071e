@@ -42,7 +42,7 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     base: 0.03,
     perKChars: 0.02,
     tier: "chat",
-    note: "Low-cost DeepSeek / Gemini tier",
+    note: "Low-cost chat tier",
     customerNote: "Fast conversation engine",
   },
   plan: {
