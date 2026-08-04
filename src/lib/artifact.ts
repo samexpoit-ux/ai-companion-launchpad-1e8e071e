@@ -74,28 +74,60 @@ export function pickEntry(files: Record<string, string>, order: string[]): strin
   return order[0] ?? "";
 }
 
-/** Extract every artifact found in an assistant message. */
+/**
+ * Extract every artifact found in an assistant message.
+ *
+ * Deliberately tolerant: on long builds models drop closing tags. A missing
+ * `</nexusAction>` used to make the lazy regex swallow the next tags into the
+ * file body, which the preview then reported as `Unexpected token`. Instead
+ * every action body ends at the first following protocol tag, and a missing
+ * `</nexusArtifact>` ends at the next artifact or end of text.
+ */
 export function parseArtifacts(text: string): ArtifactProject[] {
   const projects: ArtifactProject[] = [];
-  ARTIFACT_RE.lastIndex = 0;
+
+  ARTIFACT_OPEN_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
 
-  while ((m = ARTIFACT_RE.exec(text))) {
+  while ((m = ARTIFACT_OPEN_RE.exec(text))) {
     const head = m[2] ?? "";
-    const body = m[3] ?? "";
+    const bodyStart = m.index + m[0].length;
+
+    // Body runs to the artifact's own closing tag, or to whatever tag comes
+    // first if that closer was never emitted.
+    ARTIFACT_ANY_RE.lastIndex = bodyStart;
+    const next = ARTIFACT_ANY_RE.exec(text);
+    const bodyEnd = next ? next.index : text.length;
+    const body = text.slice(bodyStart, bodyEnd);
+    ARTIFACT_OPEN_RE.lastIndex = next ? next.index + next[0].length : text.length;
+
     const files: Record<string, string> = {};
     const order: string[] = [];
 
-    ACTION_RE.lastIndex = 0;
+    ACTION_OPEN_RE.lastIndex = 0;
     let a: RegExpExecArray | null;
-    while ((a = ACTION_RE.exec(body))) {
+    while ((a = ACTION_OPEN_RE.exec(body))) {
       const meta = a[2] ?? "";
+      const start = a.index + a[0].length;
+
+      BOUNDARY_RE.lastIndex = start;
+      const stop = BOUNDARY_RE.exec(body);
+      const end = stop ? stop.index : body.length;
+      const raw = body.slice(start, end);
+      // Resume after a proper closing tag, but never past an opening tag —
+      // that one still has to be parsed as its own action.
+      ACTION_OPEN_RE.lastIndex = stop && stop[0].startsWith("</") ? stop.index + stop[0].length : end;
+
       const type = (attr(meta, "type") ?? "file").toLowerCase();
       if (type !== "file") continue;
-      const path = (attr(meta, "filePath") ?? attr(meta, "filepath") ?? "").trim().replace(/^\.?\//, "");
+      const path = (attr(meta, "filePath") ?? attr(meta, "filepath") ?? "")
+        .trim()
+        .replace(/^\.?\//, "");
       if (!path) continue;
+      const code = cleanCode(raw);
+      if (!code.trim()) continue;
       if (!(path in files)) order.push(path);
-      files[path] = cleanCode(a[3] ?? "");
+      files[path] = code;
     }
 
     if (order.length === 0) continue;
@@ -111,6 +143,7 @@ export function parseArtifacts(text: string): ArtifactProject[] {
 
   return projects;
 }
+
 
 /** Remove artifact blocks from markdown so the chat bubble stays readable. */
 export function stripArtifacts(text: string): string {
