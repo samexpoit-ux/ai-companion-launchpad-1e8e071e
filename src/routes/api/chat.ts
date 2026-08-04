@@ -2,7 +2,13 @@ import { apiErrorResponse, codeFromUpstream } from "@/lib/api-error";
 import { createFileRoute } from "@tanstack/react-router";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
 import { isPlanId } from "@/lib/plans";
-import { actionForMode, actualUsageCost } from "@/lib/credits";
+import {
+  MAX_PROMPT_WORDS,
+  actionForMode,
+  actualUsageCost,
+  countWords,
+} from "@/lib/credits";
+
 import { systemPromptFor } from "@/lib/prompts";
 import { newTraceId, recordTrace, type TraceAttempt } from "@/lib/request-trace.server";
 import {
