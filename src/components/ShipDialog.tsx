@@ -125,6 +125,7 @@ export function ShipDialog({
     setBusy(true);
     setError(null);
     setResult(null);
+    markPushStarted(false);
     try {
       const res = await push({
         data: {
@@ -133,6 +134,13 @@ export function ShipDialog({
         },
       });
       setResult(res);
+      const active = conn ?? connection;
+      markPushSucceeded({
+        commit: res.commit,
+        files: res.files,
+        branch: res.branch,
+        ...(active?.owner ? { repo: `${active.owner}/${active.repo}` } : {}),
+      });
       setConnection({
         ...(conn ?? connection ?? { connected: true }),
         connected: true,
@@ -140,11 +148,14 @@ export function ShipDialog({
         lastPushedAt: new Date().toISOString(),
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "GitHub push failed.");
+      const message = e instanceof Error ? e.message : "GitHub push failed.";
+      setError(message);
+      markPushFailed(message);
     } finally {
       setBusy(false);
     }
   };
+
 
   const doDisconnect = async () => {
     setBusy(true);
