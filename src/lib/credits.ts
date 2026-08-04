@@ -115,11 +115,87 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
 /** Round to 2 decimals so displayed and charged values always match. */
 const round = (n: number) => Math.round(n * 100) / 100;
 
+/* ------------------------------------------------------------ word budgeting */
+
+/**
+ * Pricing is expressed in **words**, because that is the only unit a customer
+ * can count for themselves. One word is billed as ~5.5 characters of context,
+ * which is what the ledger and the model tokenizer see.
+ */
+export const CHARS_PER_WORD = 5.5;
+
+/** Hard cap on a single composer prompt. Enforced in the UI *and* on the server. */
+export const MAX_PROMPT_WORDS = 2000;
+
+/** Words in a prompt (whitespace-separated, punctuation-tolerant). */
+export function countWords(text: string): number {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+/** Credits charged per 1 000 words of input for an action. */
+export function perKWords(action: CreditAction): number {
+  return round(ACTION_RULES[action].perKChars * CHARS_PER_WORD);
+}
+
+/** Cost of an action for a prompt of `words` words. */
+export function estimateCostForWords(action: CreditAction, words = 0): number {
+  return estimateCost(action, Math.max(0, words) * CHARS_PER_WORD);
+}
+
+export interface WordBudget {
+  words: number;
+  limit: number;
+  remaining: number;
+  overBy: number;
+  overLimit: boolean;
+  /** 0-100 for the meter. */
+  pct: number;
+}
+
+export function wordBudget(text: string, limit = MAX_PROMPT_WORDS): WordBudget {
+  const words = countWords(text);
+  return {
+    words,
+    limit,
+    remaining: Math.max(0, limit - words),
+    overBy: Math.max(0, words - limit),
+    overLimit: words > limit,
+    pct: Math.min(100, Math.round((words / limit) * 100)),
+  };
+}
+
+/**
+ * Prompt coach — short, actionable hints that make a prompt cheaper *and*
+ * better. Deliberately model-free and never blocking (except the hard cap).
+ */
+export function promptCoach(text: string, limit = MAX_PROMPT_WORDS): string[] {
+  const budget = wordBudget(text, limit);
+  const tips: string[] = [];
+  if (budget.overLimit) {
+    tips.push(
+      `Trim ${budget.overBy} words — a prompt can be at most ${limit} words. Split large specs into follow-up messages.`,
+    );
+    return tips;
+  }
+  if (budget.words === 0) return tips;
+  if (budget.words < 8) tips.push("Add the goal, the screen and the outcome you expect — short prompts cost the same but deliver less.");
+  if (budget.words > limit * 0.8)
+    tips.push(`You're at ${budget.words}/${limit} words; the last ${budget.remaining} words are the priciest part of this request.`);
+  if (!/\b(page|screen|component|route|api|table|form|button|layout|style|fix|bug)\b/i.test(text))
+    tips.push("Name the page, component or file you want changed so the build stays focused.");
+  if (budget.words > 350)
+    tips.push("Long prompts bill per word — move background context into an attachment instead of pasting it.");
+  return tips.slice(0, 3);
+}
+
 /** What this action will cost, given the size of its input. */
 export function estimateCost(action: CreditAction, inputChars = 0): number {
   const rule = ACTION_RULES[action];
   return round(rule.base + (rule.perKChars * inputChars) / 1000);
 }
+
 
 export function actualUsageCost(
   action: CreditAction,
