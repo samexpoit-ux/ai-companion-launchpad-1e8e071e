@@ -232,34 +232,37 @@ export function ResellersTab() {
       </div>
 
       {/* ------------------------------------------- wholesale price list */}
-      <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h3 className="font-display text-sm font-bold text-ink-900">
-              Reseller wholesale price list
-            </h3>
-            <p className="text-xs text-ink-500">
-              Flat low price per package, no commission — resellers keep whatever they charge their
-              own customers. Prices below the cost floor are flagged.
-            </p>
-          </div>
-          <label className="block text-xs text-ink-600">
-            Engine cost / credit (USD)
-            <Input
-              value={costPerCredit}
-              onChange={(e) => setCostPerCredit(e.target.value)}
-              inputMode="decimal"
-              className="mt-1 h-9 w-28 font-mono text-sm"
-            />
-          </label>
-        </div>
+      <Panel
+        title="Reseller wholesale price list"
+        description="What a reseller pays us per package — editable, saved for every admin"
+        icon={Coins}
+        accent="var(--color-mint)"
+        actions={
+          <>
+            <label className="hidden items-center gap-2 text-xs text-ink-600 sm:flex">
+              Engine cost / credit
+              <Input
+                value={costPerCredit}
+                onChange={(e) => setCostPerCredit(e.target.value)}
+                inputMode="decimal"
+                className="h-9 w-24 font-mono text-sm"
+                aria-label="Engine cost per credit in USD"
+              />
+            </label>
+            <Button size="sm" disabled={savingPrices} onClick={() => void savePrices()}>
+              <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {savingPrices ? "Saving…" : "Save prices"}
+            </Button>
+          </>
+        }
+      >
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-xs">
+          <table className="w-full min-w-[720px] text-left text-xs">
             <thead className="text-2xs uppercase tracking-wider text-ink-500">
               <tr>
                 <th className="px-3 py-2">Package</th>
                 <th className="px-3 py-2">Retail</th>
-                <th className="px-3 py-2">Reseller pays</th>
+                <th className="px-3 py-2">Reseller pays (৳ editable)</th>
                 <th className="px-3 py-2">Our engine cost</th>
                 <th className="px-3 py-2">We keep</th>
                 <th className="px-3 py-2">Cost floor (never below)</th>
@@ -267,7 +270,8 @@ export function ResellersTab() {
             </thead>
             <tbody className="divide-y divide-ink-200/70">
               {PAID_PLANS.map((plan) => {
-                const wholesaleBdt = resellerPriceBdt(plan.id);
+                const typed = Number(priceDraft[plan.id] ?? "");
+                const wholesaleBdt = typed > 0 ? typed : wholesaleBdtFor(plan.id);
                 const wholesaleUsd = bdtToUsd(wholesaleBdt);
                 const floor = priceFloor(plan.id, cost, wholesaleUsd);
                 return (
@@ -277,15 +281,28 @@ export function ResellersTab() {
                       <span className="ml-1.5 text-ink-500">{plan.credits} cr</span>
                     </td>
                     <td className="px-3 py-2 font-mono">{money(Number(plan.price.slice(1)))}</td>
-                    <td className="px-3 py-2 font-mono font-semibold">
-                      {formatBdt(wholesaleBdt)}
-                      <span className="ml-1 text-ink-500">${wholesaleUsd.toFixed(2)}</span>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-ink-500">৳</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="10"
+                          value={priceDraft[plan.id] ?? ""}
+                          onChange={(e) =>
+                            setPriceDraft({ ...priceDraft, [plan.id]: e.target.value })
+                          }
+                          className="h-9 w-28 font-mono text-sm"
+                          aria-label={`Reseller price for ${plan.name} in BDT`}
+                        />
+                        <span className="font-mono text-ink-500">${wholesaleUsd.toFixed(2)}</span>
+                      </div>
                     </td>
                     <td className="px-3 py-2 font-mono">
                       {formatBdt(floor.breakEvenBdt)}
                       <span className="ml-1 text-ink-500">{money(floor.breakEvenUsd)}</span>
                     </td>
-                    <td className="px-3 py-2 font-mono">
+                    <td className="px-3 py-2 font-mono font-semibold">
                       {formatBdt(wholesaleBdt - floor.breakEvenBdt)}
                     </td>
                     <td className="px-3 py-2">
@@ -303,7 +320,8 @@ export function ResellersTab() {
             </tbody>
           </table>
         </div>
-      </section>
+      </Panel>
+
 
       {/* -------------------------------------------------- create a coupon */}
       <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
