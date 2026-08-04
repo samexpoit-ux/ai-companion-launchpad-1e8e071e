@@ -10,6 +10,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { getAdminDirectory, listAdminUsers } from "@/lib/admin-directory.functions";
+import { isPlanId, type ResellerPriceOverrides } from "@/lib/plans";
 
 
 /* ------------------------------------------------------------------ types */
