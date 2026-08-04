@@ -1,18 +1,37 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Percent, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Coins,
+  Percent,
+  Plus,
+  Save,
+  ShieldCheck,
+  Ticket,
+  Trash2,
+  Users,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createCoupon,
   deleteCoupon,
+  fetchResellerPrices,
+  saveResellerPrices,
   listCouponRedemptions,
   listCoupons,
   saveCoupon,
   type CouponRedemptionRow,
 } from "@/lib/admin-api";
-import { PAID_PLANS, planById, resellerPriceBdt } from "@/lib/plans";
+import {
+  PAID_PLANS,
+  planById,
+  resellerPriceBdt,
+  type PlanId,
+  type ResellerPriceOverrides,
+} from "@/lib/plans";
+import { EmptyState, HeroStrip, Panel, Pill, StatCard } from "@/components/admin/ui";
 import { useCurrency } from "@/components/admin/currency";
 import { bdtToUsd, formatBdt, usdToBdt } from "@/lib/currency";
 import { DEFAULT_ECONOMICS } from "@/lib/package-economics";
@@ -56,14 +75,29 @@ export function ResellersTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const { money, currency } = useCurrency();
   const [costPerCredit, setCostPerCredit] = useState(String(DEFAULT_ECONOMICS.costPerCredit));
+  // Admin-entered wholesale price list (BDT per package), persisted in settings.
+  const [prices, setPrices] = useState<ResellerPriceOverrides>({});
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
+  const [savingPrices, setSavingPrices] = useState(false);
+  const wholesaleBdtFor = (id: string) => resellerPriceBdt(id, prices);
   const usd = (cents: number) => money(cents / 100);
   const cost = Number(costPerCredit) > 0 ? Number(costPerCredit) : DEFAULT_ECONOMICS.costPerCredit;
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [coupons, reds] = await Promise.all([listCoupons(), listCouponRedemptions()]);
+    const [coupons, reds, priceList] = await Promise.all([
+      listCoupons(),
+      listCouponRedemptions(),
+      fetchResellerPrices(),
+    ]);
     setRows(coupons);
     setRedemptions(reds);
+    setPrices(priceList);
+    setPriceDraft(
+      Object.fromEntries(
+        PAID_PLANS.map((plan) => [plan.id, String(resellerPriceBdt(plan.id, priceList))]),
+      ),
+    );
     setLoading(false);
   }, []);
 
@@ -114,6 +148,38 @@ export function ResellersTab() {
     }
   };
 
+  const savePrices = async () => {
+    const next: ResellerPriceOverrides = {};
+    for (const plan of PAID_PLANS) {
+      const value = Number(priceDraft[plan.id] ?? "0");
+      if (!Number.isFinite(value) || value <= 0) {
+        toast.error(`Enter a valid BDT price for ${plan.name}`);
+        return;
+      }
+      next[plan.id as PlanId] = Math.round(value);
+    }
+    const losing = PAID_PLANS.find(
+      (plan) => priceFloor(plan.id, cost, bdtToUsd(next[plan.id as PlanId]!)).verdict === "loss",
+    );
+    if (
+      losing &&
+      !window.confirm(
+        `${losing.name} is priced below our engine cost — save anyway? This sells at a loss.`,
+      )
+    )
+      return;
+    setSavingPrices(true);
+    try {
+      await saveResellerPrices(next);
+      setPrices(next);
+      toast.success("Reseller price list saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save prices");
+    } finally {
+      setSavingPrices(false);
+    }
+  };
+
   const totals = useMemo(() => {
     const paid = redemptions.reduce((s, r) => s + r.paidCents, 0);
     const commission = redemptions.reduce((s, r) => s + r.commissionCents, 0);
@@ -135,18 +201,33 @@ export function ResellersTab() {
 
   return (
     <div className="space-y-6">
+      <HeroStrip
+        eyebrow="Reseller programme"
+        title={`${totals.sales} reseller sales · ${usd(totals.net)} net`}
+        subtitle="Flat wholesale prices in BDT, zero commission — resellers keep whatever they charge their own customers."
+        icon={Ticket}
+        stats={[
+          { label: "Resellers", value: String(totals.resellers) },
+          { label: "Gross paid", value: usd(totals.paid) },
+          { label: "Commission", value: usd(totals.commission) },
+        ]}
+      />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[
-          { label: "Resellers", value: String(totals.resellers), icon: Users },
-          { label: "Coupon sales", value: String(totals.sales), icon: Percent },
-          { label: "Gross paid", value: usd(totals.paid), icon: Percent },
-          { label: "Commission owed", value: usd(totals.commission), icon: Percent },
-          { label: "Net to us", value: usd(totals.net), icon: Percent },
+          { label: "Resellers", value: String(totals.resellers), icon: Users, accent: "var(--color-iris)" },
+          { label: "Coupon sales", value: String(totals.sales), icon: Ticket, accent: "var(--color-orchid)" },
+          { label: "Gross paid", value: usd(totals.paid), icon: Coins, accent: "var(--color-mint)" },
+          { label: "Commission owed", value: usd(totals.commission), icon: Percent, accent: "var(--color-sun)" },
+          { label: "Net to us", value: usd(totals.net), icon: Coins, accent: "var(--color-iris-cyan)" },
         ].map((card) => (
-          <div key={card.label} className="rounded-2xl border border-ink-200 bg-white/80 p-4">
-            <p className="text-2xs uppercase tracking-wider text-ink-500">{card.label}</p>
-            <p className="mt-1 font-display text-xl font-bold text-ink-900">{card.value}</p>
-          </div>
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            accent={card.accent}
+          />
         ))}
       </div>
 
