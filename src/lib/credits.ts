@@ -16,7 +16,9 @@ export type CreditAction =
   | "autofix" // AI patch for a runtime error
   | "image" // generate an image asset for the build
   | "preview_run" // compiling + running the sandbox preview
+  | "agent_run" // headless browser agent attempt (login / reproduce / verify)
   | "export"; // download / export a project
+
 
 export interface ActionRule {
   action: CreditAction;
