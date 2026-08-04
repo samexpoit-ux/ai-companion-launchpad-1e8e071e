@@ -277,8 +277,13 @@ function runProject(
       if (external !== undefined) return external;
       const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
       if (resolved) return load(resolved);
-      if (/\.(css|scss|sass|less)$/.test(id)) return {};
-      throw new Error(`Module "${id}" is not available in the live preview (imported by ${path}).`);
+      if (/\.(css|scss|sass|less|svg|png|jpe?g|webp|gif)$/.test(id)) return {};
+      // A missing sibling file (or an unbundled package) is a placeholder, not
+      // a dead preview: the rest of the project still renders.
+      console.info(
+        `[preview] "${id}" (imported by ${path}) was not found — rendered with a placeholder.`,
+      );
+      return stubModule(id) as Record<string, unknown>;
     };
 
     const run = new Function(
