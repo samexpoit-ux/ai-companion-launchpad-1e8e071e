@@ -147,8 +147,16 @@ export function parseArtifacts(text: string): ArtifactProject[] {
 
 /** Remove artifact blocks from markdown so the chat bubble stays readable. */
 export function stripArtifacts(text: string): string {
-  return text.replace(ARTIFACT_RE, "").replace(/\n{3,}/g, "\n\n").trim();
+  return text
+    .replace(ARTIFACT_RE, "")
+    // An artifact whose closing tag never arrived: drop it and everything after.
+    .replace(/<(nexusArtifact|boltArtifact)\b[\s\S]*$/i, "")
+    // Stray leftovers from truncated deliveries.
+    .replace(BOUNDARY_RE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
+
 
 /**
  * Chat prose for a build reply.
