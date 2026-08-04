@@ -671,6 +671,66 @@ export type Database = {
           },
         ]
       }
+      github_connection_secrets: {
+        Row: {
+          ciphertext: string
+          iv: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ciphertext: string
+          iv: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ciphertext?: string
+          iv?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      github_connections: {
+        Row: {
+          auto_push: boolean
+          branch: string
+          created_at: string
+          last_commit: string | null
+          last_pushed_at: string | null
+          login: string
+          owner: string
+          repo: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          auto_push?: boolean
+          branch?: string
+          created_at?: string
+          last_commit?: string | null
+          last_pushed_at?: string | null
+          login: string
+          owner: string
+          repo: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          auto_push?: boolean
+          branch?: string
+          created_at?: string
+          last_commit?: string | null
+          last_pushed_at?: string | null
+          login?: string
+          owner?: string
+          repo?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payments: {
         Row: {
           amount_cents: number
