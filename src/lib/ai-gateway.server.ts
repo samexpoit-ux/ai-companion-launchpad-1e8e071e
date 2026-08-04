@@ -29,7 +29,16 @@ import {
   TIER_CHAINS,
   clampChainToCeiling,
 } from "./model-tiers";
+import {
+  FreePoolError,
+  isRateLimitError,
+  noteFreeRateLimit,
+  reserveFreeSlot,
+  retryAfterFromError,
+  type FreeSlotDenial,
+} from "./free-pool.server";
 import { planById, type PlanId } from "./plans";
+
 
 
 export type TaskKind = "chat" | "code" | "reason" | "fix" | "fast" | "image";
