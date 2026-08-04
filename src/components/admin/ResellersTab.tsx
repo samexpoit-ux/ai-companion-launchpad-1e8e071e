@@ -324,8 +324,13 @@ export function ResellersTab() {
 
 
       {/* -------------------------------------------------- create a coupon */}
-      <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
-        <h3 className="font-display text-sm font-bold text-ink-900">New reseller coupon</h3>
+      <Panel
+        title="New reseller coupon"
+        description="A coupon sets the price a reseller (or their customer) pays at checkout"
+        icon={Ticket}
+        accent="var(--color-orchid)"
+        bodyClassName="space-y-3 p-4"
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block text-xs text-ink-600">
             Code
@@ -373,7 +378,7 @@ export function ResellersTab() {
                 {currency === "BDT"
                   ? `= $${draft.value.toFixed(2)} USD`
                   : `= ${formatBdt(usdToBdt(draft.value))}`}{" "}
-                · suggested {formatBdt(resellerPriceBdt(draftPlan))}
+                · suggested {formatBdt(wholesaleBdtFor(draftPlan))}
               </span>
             )}
           </label>
@@ -503,12 +508,18 @@ export function ResellersTab() {
                 : `Safe — ${draftFloor.multiple}× our ${money(draftFloor.breakEvenUsd)} (${formatBdt(draftFloor.breakEvenBdt)}) engine cost for ${draftFloor.credits} credits.`}
           </p>
         </div>
-      </section>
+      </Panel>
 
       {/* -------------------------------------------------------- coupon list */}
       <section className="space-y-3">
-        <h3 className="font-display text-sm font-bold text-ink-900">Coupons</h3>
-        {rows.length === 0 && <p className="text-sm text-ink-500">No coupons yet.</p>}
+        <h3 className="font-display text-sm font-semibold tracking-tight text-ink-900">Coupons</h3>
+        {rows.length === 0 && (
+          <EmptyState
+            icon={Ticket}
+            title="No reseller coupons yet"
+            description="Create a coupon above to give a reseller their wholesale price."
+          />
+        )}
         <div className="grid gap-3 lg:grid-cols-2">
           {rows.map((coupon) => {
             const status = couponStatus(coupon);
@@ -516,7 +527,7 @@ export function ResellersTab() {
             return (
               <div
                 key={coupon.id}
-                className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4"
+                className="space-y-3 rounded-3xl border border-ink-200/80 bg-white p-4 shadow-ds-xs transition hover:shadow-ds-md"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -632,11 +643,13 @@ export function ResellersTab() {
 
       {/* --------------------------------------------------- redemption log */}
       <section className="space-y-3">
-        <h3 className="font-display text-sm font-bold text-ink-900">Reseller sales</h3>
+        <h3 className="font-display text-sm font-semibold tracking-tight text-ink-900">
+          Reseller sales
+        </h3>
         {redemptions.length === 0 ? (
           <p className="text-sm text-ink-500">No coupon sales recorded yet.</p>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-ink-200 bg-white/80">
+          <div className="overflow-x-auto rounded-3xl border border-ink-200/80 bg-white shadow-ds-xs">
             <table className="w-full text-left text-xs">
               <thead className="text-2xs uppercase tracking-wider text-ink-500">
                 <tr>
