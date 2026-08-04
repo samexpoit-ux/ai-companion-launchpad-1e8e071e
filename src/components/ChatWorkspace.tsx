@@ -174,6 +174,19 @@ function ChatWorkspaceInner() {
   const [query, setQuery] = useState("");
   useEffect(() => setSidebarOpen(!isMobile), [isMobile]);
 
+  // When the live workspace opens, get the left rail out of the way so the
+  // preview has the full width. Reopens when the workspace is closed again,
+  // and a manual toggle always wins until the next transition.
+  const prevPreviewOpen = useRef(false);
+  useEffect(() => {
+    if (isMobile) return;
+    if (previewOpen !== prevPreviewOpen.current) {
+      prevPreviewOpen.current = previewOpen;
+      setSidebarOpen(!previewOpen);
+    }
+  }, [previewOpen, isMobile]);
+
+
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
