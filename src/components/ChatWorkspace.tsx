@@ -747,15 +747,27 @@ function ChatWorkspaceInner() {
     [modelId, updateThread, mode, credits, isMobile, openWorkspace, openProject, setFixIntent],
   );
 
+  // Pricing is word-based, so the composer measures words, quotes the cost from
+  // that number and refuses anything over the hard cap before it can be charged.
+  const budget = wordBudget(input);
+  const coachTips = promptCoach(input);
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isSending || !active) return;
+    if (budget.overLimit) {
+      setAttachmentError(
+        `Prompt is ${budget.words} words — trim ${budget.overBy} to stay under the ${MAX_PROMPT_WORDS}-word limit.`,
+      );
+      return;
+    }
     const pendingAttachments = attachments;
     setInput("");
     setAttachments([]);
     setAttachmentError(null);
     await sendText(text, active, mode, pendingAttachments);
   };
+
 
   const cancelGeneration = useCallback(() => requestAbortRef.current?.abort(), []);
 
