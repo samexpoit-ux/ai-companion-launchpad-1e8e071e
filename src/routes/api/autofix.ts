@@ -7,6 +7,8 @@ import {
   finalizeRequestCost,
 } from "@/lib/credit-guard.server";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
+import { FreePoolError, poolKey } from "@/lib/free-pool.server";
+
 import { newTraceId, recordTrace, type TraceAttempt } from "@/lib/request-trace.server";
 
 interface AutofixBody {
@@ -199,7 +201,9 @@ export const Route = createFileRoute("/api/autofix")({
             messages,
             (a) => attempts.push(a),
             request.signal,
+            poolKey(request),
           );
+
           const finalCharge = await finalizeRequestCost(request, charge.id, "autofix", {
             costUsd: result.costUsd,
             inputTokens: result.inputTokens,
@@ -319,7 +323,11 @@ export const Route = createFileRoute("/api/autofix")({
             errorMessage: e.message,
             latencyMs: Date.now() - started,
           });
-          return apiErrorResponse(codeFromUpstream(e.status), "autofix", e.message, { traceId });
+          return apiErrorResponse(codeFromUpstream(e.status), "autofix", e.message, {
+            traceId,
+            ...(err instanceof FreePoolError ? { retryAfterSec: err.retryAfterSec } : {}),
+          });
+
         }
       },
     },

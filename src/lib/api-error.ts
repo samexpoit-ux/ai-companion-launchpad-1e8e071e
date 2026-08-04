@@ -79,12 +79,13 @@ const CATALOG: Record<ApiErrorCode, { status: number; hint: string; steps: strin
   },
   rate_limited: {
     status: 429,
-    hint: "The free model is rate limited right now.",
+    hint: "The free engines are busy or have hit their shared limit.",
     steps: [
-      "Wait ~30 seconds and retry.",
-      "Switch to a different model from the header selector.",
+      "Wait for the time shown above, then send the prompt again — your credits were not charged.",
+      "Paid plans run on a dedicated lane and skip this queue entirely.",
     ],
   },
+
   quota_exhausted: {
     status: 402,
     hint: "The provider rejected the key (quota, billing or permission).",

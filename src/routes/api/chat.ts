@@ -1,6 +1,8 @@
 import { apiErrorResponse, codeFromUpstream } from "@/lib/api-error";
 import { createFileRoute } from "@tanstack/react-router";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
+import { FreePoolError, poolKey } from "@/lib/free-pool.server";
+
 import { isPlanId } from "@/lib/plans";
 import {
   MAX_PROMPT_WORDS,
@@ -233,7 +235,14 @@ export const Route = createFileRoute("/api/chat")({
 
         try {
           const { content, tokens, inputTokens, outputTokens, costUsd, upstream } =
-            await runWithFallback(route, cleanMessages, (attempt) => attempts.push(attempt), request.signal);
+            await runWithFallback(
+              route,
+              cleanMessages,
+              (attempt) => attempts.push(attempt),
+              request.signal,
+              poolKey(request),
+            );
+
           const finalCharge = await finalizeRequestCost(request, charge.id, actionForMode(mode), {
             costUsd,
             inputTokens,
@@ -322,7 +331,9 @@ export const Route = createFileRoute("/api/chat")({
             model: route.friendlyId,
             provider: "openrouter",
             traceId,
+            ...(err instanceof FreePoolError ? { retryAfterSec: err.retryAfterSec } : {}),
           });
+
         }
       },
     },
