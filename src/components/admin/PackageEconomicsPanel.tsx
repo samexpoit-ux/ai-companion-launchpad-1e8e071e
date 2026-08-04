@@ -52,35 +52,79 @@ export function PackageEconomicsPanel({ costPerCredit }: { costPerCredit?: numbe
         hint="Direct sale vs reseller sale for every credit package, from real upstream cost."
       />
 
-
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <label className="block text-xs text-ink-600">
           Upstream cost / credit (USD)
-          <Input value={cost} onChange={(e) => setCost(e.target.value)} className="mt-1" inputMode="decimal" />
+          <Input
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            className="mt-1"
+            inputMode="decimal"
+          />
         </label>
         <label className="block text-xs text-ink-600">
           Reseller discount (%)
-          <Input value={discount} onChange={(e) => setDiscount(e.target.value)} className="mt-1" inputMode="decimal" />
+          <Input
+            value={discount}
+            onChange={(e) => setDiscount(e.target.value)}
+            className="mt-1"
+            inputMode="decimal"
+          />
         </label>
         <label className="block text-xs text-ink-600">
           Reseller commission (% — 0 by default)
-          <Input value={commission} onChange={(e) => setCommission(e.target.value)} className="mt-1" inputMode="decimal" />
+          <Input
+            value={commission}
+            onChange={(e) => setCommission(e.target.value)}
+            className="mt-1"
+            inputMode="decimal"
+          />
         </label>
         <label className="block text-xs text-ink-600">
           Fixed monthly spend (USD)
-          <Input value={fixed} onChange={(e) => setFixed(e.target.value)} className="mt-1" inputMode="decimal" />
+          <Input
+            value={fixed}
+            onChange={(e) => setFixed(e.target.value)}
+            className="mt-1"
+            inputMode="decimal"
+          />
         </label>
         <label className="block text-xs text-ink-600">
           Credits actually burned (%)
-          <Input value={utilisation} onChange={(e) => setUtilisation(e.target.value)} className="mt-1" inputMode="decimal" />
+          <Input
+            value={utilisation}
+            onChange={(e) => setUtilisation(e.target.value)}
+            className="mt-1"
+            inputMode="decimal"
+          />
         </label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard icon={TrendingUp} label="Packages at 3x safety" value={`${safest}/${rows.length}`} hint="List price vs worst-case burn" />
-        <StatCard icon={Users} label="Best reseller package" value={bestReseller?.name ?? "—"} hint={bestReseller ? `${money(bestReseller.resellerProfitUsd)} net per unit` : ""} />
-        <StatCard icon={Server} label="Fixed spend to cover" value={money(num(fixed, 0))} hint="Per month, before profit" />
-        <StatCard icon={Percent} label="Word cap per prompt" value={`${MAX_PROMPT_WORDS.toLocaleString()} words`} hint="Enforced in composer and API" />
+        <StatCard
+          icon={TrendingUp}
+          label="Packages at 3x safety"
+          value={`${safest}/${rows.length}`}
+          hint="List price vs worst-case burn"
+        />
+        <StatCard
+          icon={Users}
+          label="Best reseller package"
+          value={bestReseller?.name ?? "—"}
+          hint={bestReseller ? `${money(bestReseller.resellerProfitUsd)} net per unit` : ""}
+        />
+        <StatCard
+          icon={Server}
+          label="Fixed spend to cover"
+          value={money(num(fixed, 0))}
+          hint="Per month, before profit"
+        />
+        <StatCard
+          icon={Percent}
+          label="Word cap per prompt"
+          value={`${MAX_PROMPT_WORDS.toLocaleString()} words`}
+          hint="Enforced in composer and API"
+        />
       </div>
 
       <Panel title="Direct vs reseller" description="Per single package sold" icon={Coins}>
@@ -111,7 +155,9 @@ export function PackageEconomicsPanel({ costPerCredit }: { costPerCredit?: numbe
                   <td className="px-3 py-2 font-mono">
                     {money(row.listUsd)}
                     <span className="ml-1 text-ink-500">
-                      {currency === "BDT" ? `$${row.listUsd.toFixed(2)}` : formatBdt(usdToBdt(row.listUsd))}
+                      {currency === "BDT"
+                        ? `$${row.listUsd.toFixed(2)}`
+                        : formatBdt(usdToBdt(row.listUsd))}
                     </span>
                   </td>
                   <td className="px-3 py-2 font-mono font-semibold">
@@ -123,15 +169,18 @@ export function PackageEconomicsPanel({ costPerCredit }: { costPerCredit?: numbe
                     <span className="ml-1 text-ink-500">/ {money(row.worstCaseUsd)} max</span>
                   </td>
                   <td className="px-3 py-2 font-mono text-[color:var(--color-iris-deep)]">
-                    {money(row.directProfitUsd)} <span className="text-ink-500">({row.directMarginPct}%)</span>
+                    {money(row.directProfitUsd)}{" "}
+                    <span className="text-ink-500">({row.directMarginPct}%)</span>
                   </td>
                   <td className="px-3 py-2 font-mono">{money(row.resellerPriceUsd)}</td>
                   <td className="px-3 py-2 font-mono">{money(row.commissionUsd)}</td>
                   <td className="px-3 py-2 font-mono">
-                    {money(row.resellerProfitUsd)} <span className="text-ink-500">({row.resellerMarginPct}%)</span>
+                    {money(row.resellerProfitUsd)}{" "}
+                    <span className="text-ink-500">({row.resellerMarginPct}%)</span>
                   </td>
                   <td className="px-3 py-2 font-mono">
-                    {finite(row.unitsToBreakEvenDirect)} direct · {finite(row.unitsToBreakEvenReseller)} reseller
+                    {finite(row.unitsToBreakEvenDirect)} direct ·{" "}
+                    {finite(row.unitsToBreakEvenReseller)} reseller
                   </td>
                   <td className="px-3 py-2">
                     <Pill tone={row.safe ? "good" : "bad"}>{row.multiple}x</Pill>
@@ -143,7 +192,11 @@ export function PackageEconomicsPanel({ costPerCredit }: { costPerCredit?: numbe
         </div>
       </Panel>
 
-      <Panel title="Word-based charge sheet" description="What every action costs per 1 000 words of prompt" icon={Percent}>
+      <Panel
+        title="Word-based charge sheet"
+        description="What every action costs per 1 000 words of prompt"
+        icon={Percent}
+      >
         <ul className="divide-y divide-ink-200/70">
           {(Object.keys(ACTION_RULES) as CreditAction[]).map((action) => {
             const rule = ACTION_RULES[action];

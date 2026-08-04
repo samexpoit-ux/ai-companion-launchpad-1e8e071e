@@ -260,14 +260,11 @@ export function ResellersTab() {
               min={0}
               step="0.01"
               value={
-                draft.kind === "percent" || currency === "USD"
-                  ? draft.value
-                  : usdToBdt(draft.value)
+                draft.kind === "percent" || currency === "USD" ? draft.value : usdToBdt(draft.value)
               }
               onChange={(e) => {
                 const raw = Number(e.target.value || "0");
-                const next =
-                  draft.kind === "percent" || currency === "USD" ? raw : bdtToUsd(raw);
+                const next = draft.kind === "percent" || currency === "USD" ? raw : bdtToUsd(raw);
                 setDraft({ ...draft, value: next });
               }}
               className="mt-1"
@@ -374,7 +371,9 @@ export function ResellersTab() {
           </label>
         </div>
 
-        <div className={`space-y-2 rounded-xl border px-3 py-2.5 text-xs ${FLOOR_STYLE[draftFloor.verdict]}`}>
+        <div
+          className={`space-y-2 rounded-xl border px-3 py-2.5 text-xs ${FLOOR_STYLE[draftFloor.verdict]}`}
+        >
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             {draftFloor.verdict === "safe" ? (
               <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />

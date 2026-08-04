@@ -17,9 +17,15 @@ import { fetchUsageReport, type UsageReport } from "@/lib/admin-api";
 import { formatCredits } from "@/lib/credits";
 import { DEFAULT_PRICE_PER_CREDIT, profitSummary, type ProfitRow } from "@/lib/profit";
 import { useCurrency } from "@/components/admin/currency";
-import { EmptyState, Panel, Pill, SectionHeading, StatCard, StatSkeleton } from "@/components/admin/ui";
+import {
+  EmptyState,
+  Panel,
+  Pill,
+  SectionHeading,
+  StatCard,
+  StatSkeleton,
+} from "@/components/admin/ui";
 import { PackageEconomicsPanel } from "@/components/admin/PackageEconomicsPanel";
-
 
 const RANGES = [
   { days: 1, label: "24h" },
@@ -66,7 +72,11 @@ export function ProfitTab() {
     <div className="space-y-5">
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex flex-wrap gap-1.5 rounded-full border border-ink-200 bg-white p-1 shadow-ds-xs" role="group" aria-label="Profit range">
+        <div
+          className="flex flex-wrap gap-1.5 rounded-full border border-ink-200 bg-white p-1 shadow-ds-xs"
+          role="group"
+          aria-label="Profit range"
+        >
           {RANGES.map((r) => (
             <button
               key={r.days}
@@ -102,7 +112,10 @@ export function ProfitTab() {
           onClick={() => void load(days)}
           disabled={loading}
         >
-          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
+          <RefreshCw
+            className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            aria-hidden
+          />
           Refresh
         </Button>
       </div>
@@ -133,7 +146,11 @@ export function ProfitTab() {
 
           <div className="ml-auto flex flex-wrap gap-2">
             <HeroChip label="Margin" value={`${summary.marginPct}%`} />
-            <HeroChip label="Cost multiple" value={`${summary.multiple}×`} tone={healthy ? "good" : "warn"} />
+            <HeroChip
+              label="Cost multiple"
+              value={`${summary.multiple}×`}
+              tone={healthy ? "good" : "warn"}
+            />
             <HeroChip label="Cost / credit" value={money(summary.costPerCredit)} />
           </div>
         </div>
@@ -242,7 +259,6 @@ export function ProfitTab() {
       {/* Package / reseller break-even, seeded with the measured cost per credit. */}
       <PackageEconomicsPanel costPerCredit={summary.costPerCredit} />
     </div>
-
   );
 }
 
@@ -264,7 +280,9 @@ function HeroChip({
   return (
     <div className={`rounded-2xl bg-white/10 px-3.5 py-2 ring-1 ring-inset ${ring}`}>
       <p className="text-2xs font-semibold uppercase tracking-wider text-white/55">{label}</p>
-      <p className="mt-0.5 font-display text-lg font-semibold leading-none tracking-tight">{value}</p>
+      <p className="mt-0.5 font-display text-lg font-semibold leading-none tracking-tight">
+        {value}
+      </p>
     </div>
   );
 }
@@ -317,9 +335,7 @@ function ProfitPanel({
                 )}
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink-900">{row.label}</p>
-                  {row.sub && (
-                    <p className="truncate font-mono text-2xs text-ink-500">{row.sub}</p>
-                  )}
+                  {row.sub && <p className="truncate font-mono text-2xs text-ink-500">{row.sub}</p>}
                 </div>
                 <div className="ml-auto flex shrink-0 items-baseline gap-2">
                   <span className="font-mono text-sm font-semibold text-ink-900">

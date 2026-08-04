@@ -13,7 +13,8 @@
 import { PLANS, planPriceUsd, type PlanId } from "@/lib/plans";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const pct = (part: number, whole: number) => (whole <= 0 ? 0 : Math.round((part / whole) * 1000) / 10);
+const pct = (part: number, whole: number) =>
+  whole <= 0 ? 0 : Math.round((part / whole) * 1000) / 10;
 
 export interface EconomicsInput {
   /** Real upstream USD cost of one credit (from the ledger). */

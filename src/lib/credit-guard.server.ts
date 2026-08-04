@@ -142,7 +142,10 @@ export async function chargeRequest(
   // Hard bypass signal: forged billing headers suspend the account on the spot.
   const forged = forgedBillingHeader(request);
   if (forged) {
-    await recordAbuse(supabase as unknown as RpcClient, "forged_billing_header", "hard", { header: forged, action });
+    await recordAbuse(supabase as unknown as RpcClient, "forged_billing_header", "hard", {
+      header: forged,
+      action,
+    });
     throw new CreditError(
       "unauthenticated",
       "This account has been suspended for attempting to bypass the credit system.",
@@ -165,7 +168,10 @@ export async function chargeRequest(
     });
     // Admin usage tracking is monitoring, never a gate: if the ledger function is
     // missing on this database, the build still proceeds without a ledger row.
-    if (error && !/could not find the function|schema cache|does not exist/i.test(error.message ?? "")) {
+    if (
+      error &&
+      !/could not find the function|schema cache|does not exist/i.test(error.message ?? "")
+    ) {
       throw new CreditError("unavailable", error.message ?? "Usage ledger is unavailable.");
     }
     const row = (data ?? {}) as Partial<ChargeResult>;
@@ -195,11 +201,16 @@ export async function chargeRequest(
       const remaining = Number(/([\d.]+) remaining/.exec(msg)?.[1] ?? 0);
       // Out of credits is normal once. Repeated blocked billable calls inside a
       // short window are a script hammering the limit, so the routine suspends.
-      const suspended = await recordAbuse(supabase as unknown as RpcClient, "credit_limit_retry", "soft", {
-        action,
-        cost,
-        remaining,
-      });
+      const suspended = await recordAbuse(
+        supabase as unknown as RpcClient,
+        "credit_limit_retry",
+        "soft",
+        {
+          action,
+          cost,
+          remaining,
+        },
+      );
       if (suspended) {
         throw new CreditError(
           "unauthenticated",

@@ -83,7 +83,8 @@ export function priceFloor(planId: string, costPerCredit: number, payableUsd: nu
   const cost = Math.max(0, Number(costPerCredit) || 0);
   const breakEvenUsd = round2(credits * cost);
   const safeUsd = round2(breakEvenUsd * 3);
-  const multiple = breakEvenUsd > 0 ? Math.round((payableUsd / breakEvenUsd) * 100) / 100 : Infinity;
+  const multiple =
+    breakEvenUsd > 0 ? Math.round((payableUsd / breakEvenUsd) * 100) / 100 : Infinity;
   return {
     credits,
     breakEvenUsd,
@@ -110,7 +111,10 @@ export interface CouponQuote {
 }
 
 /** What a reseller (or their customer) pays for a package with this coupon. */
-export function quoteCoupon(coupon: Pick<Coupon, "kind" | "value" | "bonusCredits" | "commissionPct">, planId: string): CouponQuote {
+export function quoteCoupon(
+  coupon: Pick<Coupon, "kind" | "value" | "bonusCredits" | "commissionPct">,
+  planId: string,
+): CouponQuote {
   const plan = planById(planId);
   const list = planPriceUsd(planId);
   let payable = list;
