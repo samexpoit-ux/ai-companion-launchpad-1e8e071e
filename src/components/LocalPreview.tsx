@@ -353,7 +353,14 @@ function runProject(
       "globalThis",
       out ?? "",
     );
-    run(req, mod, mod.exports, React, win, doc, win);
+    try {
+      run(req, mod, mod.exports, React, win, doc, win);
+    } catch (error) {
+      // Module initialisation errors used to lose their origin as they bubbled
+      // through nested imports, leaving users with an unhelpful generic overlay.
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`${path}: ${message}`, { cause: error });
+    }
     cache.set(path, mod.exports);
     return mod.exports;
   };
