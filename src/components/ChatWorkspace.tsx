@@ -1918,7 +1918,10 @@ function MessageBubble({
     hour: "2-digit",
     minute: "2-digit",
   });
-  const project = !isUser ? (parseArtifacts(message.content)[0] ?? null) : null;
+  // One response may contain a base artifact followed by route/component
+  // additions. Details and Preview must describe the same merged delivery that
+  // was applied to the workspace, not only the first block.
+  const project = !isUser ? mergeArtifactProjects(parseArtifacts(message.content)) : null;
   const modelName = message.model
     ? (AI_MODELS.find((m) => m.id === message.model)?.name ?? message.model)
     : undefined;

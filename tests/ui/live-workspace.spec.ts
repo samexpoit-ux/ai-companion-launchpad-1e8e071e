@@ -62,6 +62,36 @@ export default function App(){ return <BrowserRouter><Routes><Route path="/" ele
     await expect(page.getByText(/Build failed/i)).toHaveCount(0);
   });
 
+  test("local image assets and supported UI packages do not fail the preview", async ({ page }) => {
+    const project = `<nexusArtifact id="asset-safe" title="Asset Safe">
+<nexusAction type="file" filePath="src/App.tsx">import logo from './assets/logo.svg';
+import { Toaster } from 'sonner';
+export default function App(){ return <main><img src={logo} alt="Imported logo" /><h1>Asset preview works</h1><Toaster /></main> }</nexusAction>
+<nexusAction type="file" filePath="src/assets/logo.svg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="#2563eb"/></svg></nexusAction>
+</nexusArtifact>`;
+    await installMockBackend(page, {
+      content: project,
+      model: "ui-test/mock-model",
+      tokens: 64,
+      latencyMs: 10,
+      credits: { charged: 1, remaining: 456, total: 500, used: 44, plan: "pro" },
+    });
+    await openWorkspace(page);
+    await openLiveWorkspace(page);
+
+    const composer = page.getByPlaceholder("Ask Nexura to build something…");
+    await composer.fill("Build the asset test");
+    await page.getByRole("button", { name: "Send message" }).click();
+
+    const frame = page.frameLocator('iframe[title="Live preview"]');
+    await expect(frame.getByRole("heading", { name: "Asset preview works" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(frame.getByRole("img", { name: "Imported logo" })).toBeVisible();
+    await expect(page.getByText(/Build failed/i)).toHaveCount(0);
+    await expect(page.getByText(/Auto-fixing/i)).toHaveCount(0);
+  });
+
   test("header, tabs and stage match the baseline", async ({ page }) => {
     await openWorkspace(page);
     await openLiveWorkspace(page);

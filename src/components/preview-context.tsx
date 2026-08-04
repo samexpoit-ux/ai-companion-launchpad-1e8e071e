@@ -960,13 +960,22 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     }
     if (fixStatus === "fixing" || fixStatus === "review") return;
     if (pendingPatch) return;
+    const currentSignature = errorSignature(runtimeErrors);
+    // A successful patch can reveal a different downstream bug. That new bug
+    // gets its own retry budget immediately; otherwise three unrelated
+    // one-attempt fixes could incorrectly exhaust one shared counter.
+    if (
+      fixAttempts > 0 &&
+      lastSignatureRef.current &&
+      currentSignature !== lastSignatureRef.current
+    ) {
+      setFixAttempts(0);
+      setFixError(null);
+      setFixSkip(null);
+      setFixStatus("detected");
+      return;
+    }
     if (fixAttempts >= limitRef.current) {
-      if (lastSignatureRef.current && errorSignature(runtimeErrors) !== lastSignatureRef.current) {
-        setFixAttempts(0);
-        setFixError(null);
-        setFixStatus("detected");
-        return;
-      }
       setFixSkip({
         reason: `Retry limit reached (${limitRef.current})`,
         detail:

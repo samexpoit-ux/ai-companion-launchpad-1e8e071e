@@ -8,7 +8,6 @@ import {
   FileCode2,
   ListTree,
   Loader2,
-  PanelRight,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -144,30 +143,24 @@ export function ActivityCard({
       <div className="flex items-center gap-2 border-t border-ink-200/70 px-3 py-2">
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
+          onClick={showDetails}
+          aria-expanded={detailsOpen || open}
           data-testid="activity-details"
-          className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border border-ink-200 bg-white px-3 text-xs font-medium text-ink-700 transition hover:border-ink-300 hover:text-ink-900"
+          className={cn(
+            "inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg border bg-white px-3 text-xs font-medium transition hover:border-ink-300 hover:text-ink-900",
+            detailsOpen
+              ? "border-[color:var(--color-iris)]/45 text-ink-900"
+              : "border-ink-200 text-ink-700",
+          )}
         >
           <ListTree className="h-3.5 w-3.5" />
           Details
           <ChevronDown
-            className={cn("h-3.5 w-3.5 text-ink-400 transition-transform", open && "rotate-180")}
+            className={cn(
+              "h-3.5 w-3.5 text-ink-400 transition-transform",
+              (detailsOpen || open) && "rotate-180",
+            )}
           />
-        </button>
-        <button
-          type="button"
-          onClick={showDetails}
-          title="Open this turn in the side timeline"
-          aria-label="Open this turn in the side timeline"
-          className={cn(
-            "hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-ink-500 transition hover:text-ink-900 md:inline-flex",
-            detailsOpen
-              ? "border-[color:var(--color-iris)]/45 bg-[color:var(--color-iris)]/10 text-ink-900"
-              : "border-ink-200 bg-white hover:border-ink-300",
-          )}
-        >
-          <PanelRight className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
