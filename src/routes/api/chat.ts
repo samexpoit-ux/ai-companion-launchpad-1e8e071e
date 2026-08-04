@@ -233,7 +233,14 @@ export const Route = createFileRoute("/api/chat")({
 
         try {
           const { content, tokens, inputTokens, outputTokens, costUsd, upstream } =
-            await runWithFallback(route, cleanMessages, (attempt) => attempts.push(attempt), request.signal);
+            await runWithFallback(
+              route,
+              cleanMessages,
+              (attempt) => attempts.push(attempt),
+              request.signal,
+              poolKey(request),
+            );
+
           const finalCharge = await finalizeRequestCost(request, charge.id, actionForMode(mode), {
             costUsd,
             inputTokens,
