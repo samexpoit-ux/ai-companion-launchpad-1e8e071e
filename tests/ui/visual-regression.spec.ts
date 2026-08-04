@@ -59,7 +59,7 @@ test.describe("Preview visual regression", () => {
     await buildPreview(page);
     await page.getByRole("button", { name: "Code" }).click();
     const stage = page.getByTestId("workspace-stage");
-    await expect(stage.getByText("src/pages/Home.tsx").first()).toBeVisible();
+    await expect(stage.getByText("Home.tsx").first()).toBeVisible();
     await expect(stage).toHaveScreenshot("preview-code.png");
   });
 
