@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  Layers,
   MoreHorizontal,
   Pencil,
   Search,
