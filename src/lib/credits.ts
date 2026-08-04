@@ -78,8 +78,9 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     base: 0.12,
     perKChars: 0.01,
     tier: "image",
-    note: "Cheapest image model (gemini-2.5-flash-image)",
-    customerNote: "Image generation engine",
+    note: "Cheapest capable image model in the router",
+    customerNote: "Image studio — thumbnails, posters & social art",
+
   },
   preview_run: {
     action: "preview_run",
