@@ -919,3 +919,31 @@ export async function redeemCouponForUser(input: {
     plan: input.planSlug,
   });
 }
+
+/* ------------------------------------------------------- reseller pricing */
+
+/**
+ * Reseller wholesale price list (BDT per package).
+ *
+ * Stored as one `platform_settings` row so the price an admin types in the
+ * Resellers tab survives reloads and is shared by every admin.
+ */
+export async function fetchResellerPrices(): Promise<ResellerPriceOverrides> {
+  const { data, error } = await supabase
+    .from("platform_settings")
+    .select("value")
+    .eq("key", "reseller_pricing")
+    .maybeSingle();
+  if (error || !data?.value) return {};
+  const raw = data.value as Record<string, unknown>;
+  const out: ResellerPriceOverrides = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const price = Number(value);
+    if (isPlanId(key) && Number.isFinite(price) && price > 0) out[key] = price;
+  }
+  return out;
+}
+
+export async function saveResellerPrices(prices: ResellerPriceOverrides) {
+  await saveSetting("reseller_pricing", prices as Record<string, unknown>);
+}
