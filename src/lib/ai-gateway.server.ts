@@ -537,7 +537,9 @@ export async function runWithFallback(
               ],
               route.task,
               signal,
+              remaining(),
             );
+
             if (reformat.content.trim()) {
               out = {
                 content: reformat.content,
