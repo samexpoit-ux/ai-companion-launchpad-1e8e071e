@@ -27,7 +27,8 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { BrandMark, BrandWordmark } from "@/components/BrandMark";
+import { BrandMark } from "@/components/BrandMark";
+import { BrandBadge } from "@/components/BrandBadge";
 import nexuraLogo from "@/assets/nexura-mark.png";
 import { EngineLogo } from "@/components/EngineLogos";
 import { PLANS } from "@/lib/plans";
@@ -180,10 +181,7 @@ function LandingPage() {
       {/* ------------------------------------------------------------ header */}
       <header className="sticky top-0 z-40 border-b border-ink-200/70 bg-white/75 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-2.5">
-            <BrandMark size="md" />
-            <BrandWordmark className="text-[15px] sm:text-[17px]" />
-          </div>
+          <BrandBadge size="md" />
           <nav className="flex items-center gap-2">
             <a
               href="#features"
@@ -704,8 +702,7 @@ function LandingPage() {
 
       <footer className="border-t border-ink-200 bg-white/70 px-5 py-7 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3">
-          <BrandMark size="sm" />
-          <BrandWordmark className="text-sm" />
+          <BrandBadge size="sm" />
           <p className="ml-auto text-2xs text-ink-400">
             Nexura AI · nexuraai.dev · Developed by{" "}
             <span className="font-medium text-ink-600">Sam</span>

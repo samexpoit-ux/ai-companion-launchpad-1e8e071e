@@ -192,12 +192,20 @@ function compileModule(path: string, source: string) {
   const hit = buildCache.get(key);
   if (hit !== undefined) return hit;
 
-  const out =
-    transform(source, {
-      filename: path,
-      presets: [["react", { runtime: "classic" }], "typescript"],
-      plugins: ["transform-modules-commonjs"],
-    }).code ?? "";
+  let out = "";
+  try {
+    out =
+      transform(source, {
+        filename: path,
+        presets: [["react", { runtime: "classic" }], "typescript"],
+        plugins: ["transform-modules-commonjs"],
+      }).code ?? "";
+  } catch (err) {
+    // Surface the offending file and location: a bare Babel message ("Unexpected
+    // token (12:4)") gave the auto-fixer nothing to work with.
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`${path}: ${message.replace(/^unknown(\sfile)?:\s*/i, "")}`);
+  }
 
   if (buildCache.size >= BUILD_CACHE_MAX) {
     // Simple FIFO eviction — the working set is one project at a time.
@@ -207,6 +215,7 @@ function compileModule(path: string, source: string) {
   buildCache.set(key, out);
   return out;
 }
+
 
 /**
  * Warm the heavy, shared parts of the preview runtime (Tailwind compiler, web
@@ -263,10 +272,24 @@ function runProject(
       return empty;
     }
     if (/\.json$/.test(path)) {
-      const parsed = JSON.parse(source || "{}") as Record<string, unknown>;
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = JSON.parse(source || "{}") as Record<string, unknown>;
+      } catch {
+        // A malformed data file should not kill the whole render.
+        console.info(`[preview] "${path}" is not valid JSON — used an empty object.`);
+      }
       cache.set(path, parsed);
       return parsed;
     }
+    // Markup, docs, config and other non-JS files are not modules: importing one
+    // used to hand raw HTML to Babel and fail the entire build.
+    if (/\.(html?|md|mdx|txt|ya?ml|toml|lock|env)$/i.test(path)) {
+      const empty = { default: source };
+      cache.set(path, empty);
+      return empty;
+    }
+
 
     const out = compileModule(path, source);
     const mod: { exports: Record<string, unknown> } = { exports: {} };
@@ -311,6 +334,35 @@ function pickComponent(exports: Record<string, unknown>): React.ComponentType | 
     | React.ComponentType
     | undefined;
 }
+
+const BOOTSTRAP = /(^|\/)(main|index|entry|bootstrap|client)\.(t|j)sx?$/;
+const RENDERABLE = /\.(t|j)sx$/;
+
+/**
+ * Pick the module we should render.
+ *
+ * Bootstrap files (`main.tsx`, `index.tsx`) call `createRoot` themselves and
+ * export nothing, so rendering them left a blank frame and a phantom build
+ * error. Prefer a real component module and keep the declared entry as the
+ * fallback.
+ */
+function pickRenderEntry(files: Record<string, string>, entry?: string): string {
+  const paths = Object.keys(files);
+  const isRenderable = (p?: string): p is string =>
+    !!p && p in files && RENDERABLE.test(p) && !BOOTSTRAP.test(p);
+
+  if (isRenderable(entry)) return entry;
+
+  const app = paths.find((p) => /(^|\/)App\.(t|j)sx?$/.test(p));
+  if (app) return app;
+
+  const page =
+    paths.find((p) => /(^|\/)(pages|routes|app)\/.*index\.(t|j)sx$/i.test(p)) ??
+    paths.find((p) => isRenderable(p) && /export\s+default/.test(files[p] ?? "")) ??
+    paths.find((p) => isRenderable(p));
+  return page ?? entry ?? paths[0] ?? "";
+}
+
 
 interface Props {
   payload: PreviewPayload;
@@ -443,14 +495,26 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
       try {
         let Component: React.ComponentType | undefined;
 
-        if (payload.files && payload.entry) {
+        if (payload.files && Object.keys(payload.files).length > 0) {
           const files = payload.files;
-          // Bootstrap entries call createRoot themselves. Running those in the
-          // host realm can mount outside the iframe and leave a blank preview.
-          const appPath = Object.keys(files).find((p) => /(^|\/)App\.(tsx|jsx|ts|js)$/.test(p));
-          const renderEntry = payload.entry ?? appPath;
+          const renderEntry = pickRenderEntry(files, payload.entry);
           Component = pickComponent(runProject(files, renderEntry, doc, win));
+
+          // The chosen module exported no component (a bootstrap file, a config
+          // module): walk the other renderable files before giving up.
+          if (!Component) {
+            for (const candidate of Object.keys(files)) {
+              if (candidate === renderEntry || !/\.(t|j)sx$/.test(candidate)) continue;
+              try {
+                Component = pickComponent(runProject(files, candidate, doc, win));
+              } catch {
+                continue;
+              }
+              if (Component) break;
+            }
+          }
         } else {
+
           const source = ensureDefaultExport(payload.code);
           const out = compileModule(payload.lang === "react-ts" ? "App.tsx" : "App.jsx", source);
           const module: { exports: Record<string, unknown> } = { exports: {} };
@@ -629,9 +693,11 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
 
       {compileError && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
-          Build failed — see the error overlay for details.
+          <span className="font-semibold">Build failed:</span>{" "}
+          <span className="break-words">{compileError}</span>
         </div>
       )}
+
     </div>
   );
 }

@@ -28,7 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { BrandMark } from "@/components/BrandMark";
+import { BrandBadge } from "@/components/BrandBadge";
 import { useAdmin } from "@/hooks/useAdmin";
 
 export type RecentProject = { id: string; title: string; updatedAt: number };
@@ -95,7 +95,7 @@ export function WorkspaceSidebar({
 
       <div className="flex items-center justify-between px-3 py-3">
         <Link to="/dashboard" className="flex items-center gap-2">
-          <BrandMark size="sm" />
+          <BrandBadge size="sm" />
         </Link>
         <button
           type="button"
