@@ -495,14 +495,26 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
       try {
         let Component: React.ComponentType | undefined;
 
-        if (payload.files && payload.entry) {
+        if (payload.files && Object.keys(payload.files).length > 0) {
           const files = payload.files;
-          // Bootstrap entries call createRoot themselves. Running those in the
-          // host realm can mount outside the iframe and leave a blank preview.
-          const appPath = Object.keys(files).find((p) => /(^|\/)App\.(tsx|jsx|ts|js)$/.test(p));
-          const renderEntry = payload.entry ?? appPath;
+          const renderEntry = pickRenderEntry(files, payload.entry);
           Component = pickComponent(runProject(files, renderEntry, doc, win));
+
+          // The chosen module exported no component (a bootstrap file, a config
+          // module): walk the other renderable files before giving up.
+          if (!Component) {
+            for (const candidate of Object.keys(files)) {
+              if (candidate === renderEntry || !/\.(t|j)sx$/.test(candidate)) continue;
+              try {
+                Component = pickComponent(runProject(files, candidate, doc, win));
+              } catch {
+                continue;
+              }
+              if (Component) break;
+            }
+          }
         } else {
+
           const source = ensureDefaultExport(payload.code);
           const out = compileModule(payload.lang === "react-ts" ? "App.tsx" : "App.jsx", source);
           const module: { exports: Record<string, unknown> } = { exports: {} };
