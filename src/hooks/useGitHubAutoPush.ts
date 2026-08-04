@@ -51,7 +51,8 @@ export function useGitHubAutoPush(payload: ShipPayload | null) {
       } catch (error) {
         if (!cancelled) {
           toast.error("Auto-push to GitHub failed", {
-            description: error instanceof Error ? error.message : "Try pushing from the Ship dialog.",
+            description:
+              error instanceof Error ? error.message : "Try pushing from the Ship dialog.",
           });
         }
       } finally {

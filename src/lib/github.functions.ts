@@ -91,7 +91,12 @@ export const connectGitHub = createServerFn({ method: "POST" })
     };
 
     const secret = await admin.from("github_connection_secrets").upsert(
-      { user_id: context.userId, ciphertext: sealed.ciphertext, iv: sealed.iv, updated_at: new Date().toISOString() },
+      {
+        user_id: context.userId,
+        ciphertext: sealed.ciphertext,
+        iv: sealed.iv,
+        updated_at: new Date().toISOString(),
+      },
       { onConflict: "user_id" },
     );
     if (secret.error) throw new Error(`Could not store the token: ${secret.error.message}`);
@@ -131,7 +136,9 @@ export const setGitHubAutoPush = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const admin = supabaseAdmin as unknown as {
       from: (t: string) => {
-        update: (v: unknown) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> };
+        update: (v: unknown) => {
+          eq: (c: string, v: string) => Promise<{ error: { message: string } | null }>;
+        };
       };
     };
     const { error } = await admin

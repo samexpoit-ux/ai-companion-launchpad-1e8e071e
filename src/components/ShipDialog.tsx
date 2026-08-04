@@ -30,7 +30,13 @@ import {
 } from "@/lib/github.functions";
 import { buildShipFiles, slugify, type ShipPayload } from "@/lib/ship-bundle";
 
-export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; trigger: React.ReactNode }) {
+export function ShipDialog({
+  payload,
+  trigger,
+}: {
+  payload: ShipPayload | null;
+  trigger: React.ReactNode;
+}) {
   const connect = useServerFn(connectGitHub);
   const push = useServerFn(pushToConnectedRepo);
   const disconnect = useServerFn(disconnectGitHub);
@@ -43,7 +49,12 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState(slugify(payload?.title));
   const [connection, setConnection] = useState<GitHubConnection | null>(null);
-  const [result, setResult] = useState<{ repoUrl: string; branch: string; commit: string; files: number } | null>(null);
+  const [result, setResult] = useState<{
+    repoUrl: string;
+    branch: string;
+    commit: string;
+    files: number;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,7 +72,6 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
   }, [readConnection]);
 
   const fileCount = payload ? Object.keys(payload.files).length : 0;
-
 
   const downloadZip = async () => {
     if (!payload) return;
@@ -155,7 +165,6 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
     }
   };
 
-
   return (
     <Dialog>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -163,8 +172,8 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
         <DialogHeader>
           <DialogTitle>Ship this project</DialogTitle>
           <DialogDescription>
-            {fileCount} file{fileCount === 1 ? "" : "s"} from the live workspace, packaged as a runnable
-            Vite + React app. Nothing to copy or paste.
+            {fileCount} file{fileCount === 1 ? "" : "s"} from the live workspace, packaged as a
+            runnable Vite + React app. Nothing to copy or paste.
           </DialogDescription>
         </DialogHeader>
 
@@ -180,8 +189,16 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
               Includes <code>package.json</code>, Vite config, entry HTML and a README, so
               <code> npm install &amp;&amp; npm run dev</code> just works.
             </p>
-            <Button onClick={() => void downloadZip()} disabled={!payload || zipping} className="w-full">
-              {zipping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileArchive className="mr-2 h-4 w-4" />}
+            <Button
+              onClick={() => void downloadZip()}
+              disabled={!payload || zipping}
+              className="w-full"
+            >
+              {zipping ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileArchive className="mr-2 h-4 w-4" />
+              )}
               {zipping ? "Packaging…" : "Download .zip"}
             </Button>
           </TabsContent>
@@ -209,8 +226,12 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
                 </div>
                 <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                   <div>
-                    <Label htmlFor="gh-auto" className="text-sm">Push after every build</Label>
-                    <p className="text-xs text-muted-foreground">Keep the repo in sync automatically.</p>
+                    <Label htmlFor="gh-auto" className="text-sm">
+                      Push after every build
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Keep the repo in sync automatically.
+                    </p>
                   </div>
                   <Switch
                     id="gh-auto"
@@ -218,11 +239,25 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
                     onCheckedChange={(v) => void doToggleAuto(v)}
                   />
                 </div>
-                <Button onClick={() => void doPush()} disabled={!payload || busy} className="w-full">
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
+                <Button
+                  onClick={() => void doPush()}
+                  disabled={!payload || busy}
+                  className="w-full"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Github className="mr-2 h-4 w-4" />
+                  )}
                   {busy ? "Pushing…" : "Push latest files"}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => void doDisconnect()} disabled={busy} className="w-full">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void doDisconnect()}
+                  disabled={busy}
+                  className="w-full"
+                >
                   <Unplug className="mr-2 h-4 w-4" />
                   Disconnect repository
                 </Button>
@@ -240,21 +275,35 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
                     onChange={(e) => setToken(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Stored encrypted on the server so later pushes are one click. Never exposed to the browser.
+                    Stored encrypted on the server so later pushes are one click. Never exposed to
+                    the browser.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="gh-owner">Owner / org (optional)</Label>
-                    <Input id="gh-owner" placeholder="your-username" value={owner} onChange={(e) => setOwner(e.target.value)} />
+                    <Input
+                      id="gh-owner"
+                      placeholder="your-username"
+                      value={owner}
+                      onChange={(e) => setOwner(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="gh-repo">Repository</Label>
                     <Input id="gh-repo" value={repo} onChange={(e) => setRepo(e.target.value)} />
                   </div>
                 </div>
-                <Button onClick={() => void doConnect()} disabled={!payload || busy || token.trim().length < 20} className="w-full">
-                  {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Github className="mr-2 h-4 w-4" />}
+                <Button
+                  onClick={() => void doConnect()}
+                  disabled={!payload || busy || token.trim().length < 20}
+                  className="w-full"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Github className="mr-2 h-4 w-4" />
+                  )}
                   {busy ? "Connecting…" : "Connect repo & push"}
                 </Button>
               </>
@@ -281,14 +330,20 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
 
           <TabsContent value="deploy" className="space-y-3 pt-4">
             <p className="text-sm text-muted-foreground">
-              Push to GitHub first, then connect that repo to any host — or build it straight on your VPS:
+              Push to GitHub first, then connect that repo to any host — or build it straight on
+              your VPS:
             </p>
             <pre className="overflow-x-auto rounded-md border border-border bg-muted/40 p-3 text-xs">
-{`git clone <your-repo> app && cd app
+              {`git clone <your-repo> app && cd app
 npm install && npm run build
 # serve dist/ with nginx (SPA fallback: try_files $uri /index.html;)`}
             </pre>
-            <Button variant="secondary" className="w-full" onClick={() => void downloadZip()} disabled={!payload}>
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => void downloadZip()}
+              disabled={!payload}
+            >
               <Rocket className="mr-2 h-4 w-4" />
               Download deploy bundle
             </Button>

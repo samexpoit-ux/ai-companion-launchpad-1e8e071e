@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react
 import { analyzeStack } from "@/lib/stack";
 import { useGitHubAutoPush } from "@/hooks/useGitHubAutoPush";
 
-
 import { ShipDialog } from "@/components/ShipDialog";
 import {
   X,
@@ -131,7 +130,6 @@ export function PreviewPanel() {
     [payload],
   );
   useGitHubAutoPush(shipPayload);
-
 
   // Safe run flow: nothing executes in the sandbox until the user explicitly
   // arms this revision. A new AI patch (new revision) re-locks the preview.
