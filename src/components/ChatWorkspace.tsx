@@ -897,16 +897,20 @@ function ChatWorkspaceInner() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-5 pt-3 pb-2">
-          <span className="text-2xs font-bold uppercase tracking-[0.18em] text-ink-400">
-            Chat history
-          </span>
-          <span className="rounded-full bg-ink-200 px-1.5 text-2xs text-ink-500">
-            {filtered.length}
-          </span>
-        </div>
+        {/* Chat history — one contained box so the rail never looks scattered */}
+        <div className="flex min-h-0 flex-1 flex-col p-3">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-ink-200 bg-white/70 shadow-[0_18px_40px_-32px_rgba(37,74,140,0.45)]">
+            <div className="flex items-center justify-between border-b border-ink-200 px-3 py-2">
+              <span className="text-2xs font-bold uppercase tracking-[0.18em] text-ink-400">
+                Chat history
+              </span>
+              <span className="rounded-full bg-ink-100 px-1.5 text-2xs text-ink-500">
+                {filtered.length}
+              </span>
+            </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+
           {filtered.map((t) => {
             const isRenaming = renamingId === t.id;
             const isActive = t.id === activeId;
