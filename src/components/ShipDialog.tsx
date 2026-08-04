@@ -195,6 +195,29 @@ export function ShipDialog({
     }
   };
 
+  /** Create/attach the repository for an already-authorized account. */
+  const doLinkRepo = async () => {
+    if (!payload) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const conn = await linkRepo({
+        data: {
+          repo: repo.trim() || slugify(payload.title),
+          owner: owner.trim() || undefined,
+          private: true,
+          autoPush: true,
+        },
+      });
+      setConnection(conn);
+      await doPush(conn);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create the repository.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const doPush = async (conn?: GitHubConnection) => {
     if (!payload) return;
     setBusy(true);
@@ -293,7 +316,53 @@ export function ShipDialog({
           </TabsContent>
 
           <TabsContent value="github" className="space-y-3 pt-4">
-            {connection?.connected ? (
+            {connection?.connected && connection.repoLinked === false ? (
+              <>
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">Authorized as {connection.login}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Pick a repository name — we create it on your account and start syncing.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-owner2">Owner / org (optional)</Label>
+                    <Input
+                      id="gh-owner2"
+                      placeholder={connection.login}
+                      value={owner}
+                      onChange={(e) => setOwner(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-repo2">Repository</Label>
+                    <Input id="gh-repo2" value={repo} onChange={(e) => setRepo(e.target.value)} />
+                  </div>
+                </div>
+                <Button
+                  onClick={() => void doLinkRepo()}
+                  disabled={!payload || busy}
+                  className="w-full"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Github className="mr-2 h-4 w-4" />
+                  )}
+                  {busy ? "Creating…" : "Create repo & push"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void doDisconnect()}
+                  disabled={busy}
+                  className="w-full"
+                >
+                  <Unplug className="mr-2 h-4 w-4" />
+                  Disconnect GitHub
+                </Button>
+              </>
+            ) : connection?.connected ? (
               <>
                 <GitHubStatusPanel
                   connection={connection}
