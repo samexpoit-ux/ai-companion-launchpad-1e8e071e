@@ -1549,9 +1549,54 @@ function ChatWorkspaceInner() {
           </>
         )}
       </PanelGroup>
+
+      <Dialog open={namePromptOpen} onOpenChange={setNamePromptOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Name your project</DialogTitle>
+            <DialogDescription>
+              This becomes the workspace name and the brand name Nexura uses while building.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void createNamedWorkspace(projectNameDraft);
+            }}
+            className="space-y-4"
+          >
+            <input
+              autoFocus
+              value={projectNameDraft}
+              onChange={(e) => setProjectNameDraft(e.target.value)}
+              placeholder="e.g. Lumen Fitness, Nexura Store, Portfolio v2"
+              aria-label="Project name"
+              maxLength={60}
+              className="w-full rounded-xl border border-ink-200 bg-white px-3 py-2.5 text-sm text-ink-900 outline-none transition focus:border-[color:var(--color-iris)] focus:ring-2 focus:ring-[color:var(--color-iris)]/20"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => void createNamedWorkspace("")}
+                className="rounded-lg px-3 py-2 text-xs font-medium text-ink-500 transition hover:bg-ink-100 hover:text-ink-900"
+              >
+                Skip for now
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-95"
+                style={{ background: "var(--iris-gradient)" }}
+              >
+                Start building
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+
 
 function SendButton({
   onClick,
