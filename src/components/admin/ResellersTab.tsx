@@ -31,7 +31,7 @@ import {
   type PlanId,
   type ResellerPriceOverrides,
 } from "@/lib/plans";
-import { EmptyState, HeroStrip, Panel, Pill, StatCard } from "@/components/admin/ui";
+import { EmptyState, HeroStrip, Panel, StatCard } from "@/components/admin/ui";
 import { useCurrency } from "@/components/admin/currency";
 import { bdtToUsd, formatBdt, usdToBdt } from "@/lib/currency";
 import { DEFAULT_ECONOMICS } from "@/lib/package-economics";
