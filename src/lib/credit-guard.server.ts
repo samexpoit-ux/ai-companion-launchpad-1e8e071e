@@ -64,7 +64,10 @@ function forgedBillingHeader(request: Request): string | null {
   return null;
 }
 
-type Client = ReturnType<typeof createClient>;
+/** Minimal shape we need — avoids fighting the generated Supabase generics. */
+interface RpcClient {
+  rpc: (fn: string, args?: Record<string, unknown>) => PromiseLike<{ data: unknown }>;
+}
 
 /**
  * Records an abuse attempt for the caller and returns true when the account was
@@ -72,7 +75,7 @@ type Client = ReturnType<typeof createClient>;
  * period — exactly as the anti-bypass policy requires.
  */
 async function recordAbuse(
-  supabase: Client,
+  supabase: RpcClient,
   kind: string,
   severity: "hard" | "soft",
   details: Record<string, unknown>,
@@ -81,7 +84,7 @@ async function recordAbuse(
     const { data } = await supabase.rpc("record_abuse_attempt", {
       _kind: kind,
       _severity: severity,
-      _details: details,
+      _details: details as Record<string, unknown>,
     });
     return (data as { suspended?: boolean } | null)?.suspended === true;
   } catch {
@@ -139,7 +142,7 @@ export async function chargeRequest(
   // Hard bypass signal: forged billing headers suspend the account on the spot.
   const forged = forgedBillingHeader(request);
   if (forged) {
-    await recordAbuse(supabase, "forged_billing_header", "hard", { header: forged, action });
+    await recordAbuse(supabase as unknown as RpcClient, "forged_billing_header", "hard", { header: forged, action });
     throw new CreditError(
       "unauthenticated",
       "This account has been suspended for attempting to bypass the credit system.",
@@ -192,7 +195,7 @@ export async function chargeRequest(
       const remaining = Number(/([\d.]+) remaining/.exec(msg)?.[1] ?? 0);
       // Out of credits is normal once. Repeated blocked billable calls inside a
       // short window are a script hammering the limit, so the routine suspends.
-      const suspended = await recordAbuse(supabase, "credit_limit_retry", "soft", {
+      const suspended = await recordAbuse(supabase as unknown as RpcClient, "credit_limit_retry", "soft", {
         action,
         cost,
         remaining,
