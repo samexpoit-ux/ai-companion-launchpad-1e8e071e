@@ -17,6 +17,51 @@ async function box(page: Page, locator: ReturnType<Page["getByTestId"]>) {
 }
 
 test.describe("Live Workspace", () => {
+  test("loading /admin never overwrites the / home page", async ({ page }) => {
+    const fullProject = `<nexusArtifact id="route-safe-site" title="Route Safe Site">
+<nexusAction type="file" filePath="src/App.tsx">import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import Admin from './pages/Admin';
+export default function App(){ return <BrowserRouter><Routes><Route path="/" element={<Home />} /><Route path="/admin" element={<Admin />} /></Routes></BrowserRouter> }</nexusAction>
+<nexusAction type="file" filePath="src/pages/Home.tsx">export default function Home(){ return <main><h1>Permanent Home Page</h1><p>Public website remains intact.</p></main> }</nexusAction>
+<nexusAction type="file" filePath="src/pages/Admin.tsx">export default function Admin(){ return <main><h1>Private Admin Dashboard</h1><p>Admin route is isolated.</p></main> }</nexusAction>
+</nexusArtifact>`;
+    await installMockBackend(page, {
+      content: fullProject,
+      model: "ui-test/mock-model",
+      tokens: 128,
+      latencyMs: 10,
+      credits: { charged: 1, remaining: 456, total: 500, used: 44, plan: "pro" },
+    });
+    await openWorkspace(page);
+    await openLiveWorkspace(page);
+
+    const composer = page.getByPlaceholder("Ask Nexura to build something…");
+    await composer.fill("Add an admin dashboard as a separate route");
+    const send = page.getByRole("button", { name: "Send message" });
+    await expect(send).toBeEnabled();
+    await send.click();
+    const frame = page.frameLocator('iframe[title="Live preview"]');
+    await expect(frame.getByRole("heading", { name: "Permanent Home Page" })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    const path = page.getByLabel("Preview path");
+    await path.fill("/admin");
+    await path.press("Enter");
+    await expect(frame.getByRole("heading", { name: "Private Admin Dashboard" })).toBeVisible({
+      timeout: 20_000,
+    });
+
+    await path.fill("/");
+    await path.press("Enter");
+    await expect(frame.getByRole("heading", { name: "Permanent Home Page" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(frame.getByRole("heading", { name: "Private Admin Dashboard" })).toHaveCount(0);
+    await expect(page.getByText(/Build failed/i)).toHaveCount(0);
+  });
+
   test("header, tabs and stage match the baseline", async ({ page }) => {
     await openWorkspace(page);
     await openLiveWorkspace(page);

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ArtifactProject } from "@/lib/artifact";
+import { previewRouter } from "@/lib/preview-shims";
 
 export type PreviewLang = "react" | "react-ts" | "html" | "vanilla" | "vanilla-ts" | "css" | "mdx";
 export type PreviewTab = "preview" | "code" | "console" | "stack";
@@ -467,6 +468,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
   const openPreview = useCallback(
     (code: string, rawLang: string) => {
+      previewRouter.reset();
       const next: PreviewPayload = { code, lang: smartDetect(code, rawLang) };
       setPayload(next);
       setIsOpen(true);
@@ -480,6 +482,10 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
   const openProject = useCallback(
     (project: ArtifactProject) => {
+      // Routes belong to the project being opened, not the previous thread.
+      // Always reveal the new project's home first; navigating within an
+      // iterative update is intentionally preserved by applyProjectUpdate.
+      previewRouter.reset();
       const entry = project.entry;
       const code = project.files[entry] ?? "";
       const next: PreviewPayload = {
@@ -626,6 +632,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, [openProject]);
 
   const clearProject = useCallback(() => {
+    previewRouter.reset();
     setPayload(null);
     setTimeline(null);
     setActiveFile(null);
@@ -723,6 +730,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const rollbackTo = useCallback((id: string) => {
     const target = versionsRef.current.find((v) => v.id === id);
     if (!target) return;
+    // A restored version is a fresh document view. Do not carry a route that
+    // may only exist in the newer version into the restored sandbox.
+    previewRouter.reset();
     setPayload(target.payload);
     setActiveFile(target.payload.entry ?? null);
     setRevision((r) => r + 1);

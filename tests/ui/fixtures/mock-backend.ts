@@ -107,7 +107,10 @@ const MOCK_CHAT_REPLY = {
   credits: { charged: 1, remaining: 457, total: 500, used: 43, plan: "pro" },
 };
 
-export async function installMockBackend(page: Page): Promise<void> {
+export async function installMockBackend(
+  page: Page,
+  chatReply: Record<string, unknown> = MOCK_CHAT_REPLY,
+): Promise<void> {
   // Realtime websockets never reach a server in test mode.
   if (typeof page.routeWebSocket === "function") {
     await page.routeWebSocket(/realtime/, () => {
@@ -143,6 +146,18 @@ export async function installMockBackend(page: Page): Promise<void> {
     if (method !== "GET") {
       // Writes are accepted and echoed back so optimistic UI keeps working.
       const body = route.request().postDataJSON?.() ?? {};
+      if (path.startsWith("chat_threads") && !Array.isArray(body)) {
+        return json(
+          route,
+          {
+            id: "00000000-0000-4000-8000-0000000000bb",
+            last_message_at: "2026-08-04T00:00:00Z",
+            created_at: "2026-08-04T00:00:00Z",
+            ...body,
+          },
+          201,
+        );
+      }
       return json(route, Array.isArray(body) ? body : [body], 201);
     }
 
@@ -155,7 +170,7 @@ export async function installMockBackend(page: Page): Promise<void> {
   });
 
   // ---- App API routes ----------------------------------------------------
-  await page.route("**/api/chat", (route) => json(route, MOCK_CHAT_REPLY));
+  await page.route("**/api/chat", (route) => json(route, chatReply));
   await page.route("**/api/spend", (route) =>
     json(route, { credits: { charged: 1, remaining: 457, total: 500, used: 43, plan: "pro" } }),
   );

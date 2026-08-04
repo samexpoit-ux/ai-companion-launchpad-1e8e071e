@@ -14,6 +14,7 @@ interface RouterCtx {
   path: string;
   navigate: (to: string, opts?: { replace?: boolean }) => void;
   params: Record<string, string>;
+  outlet?: React.ReactNode;
 }
 
 type PathListener = () => void;
@@ -134,7 +135,13 @@ function Routes({ children }: { children?: React.ReactNode }) {
       );
     }
   }
-  return <>{fallback?.props.element ?? fallback?.props.children ?? null}</>;
+  if (fallback) return <>{fallback.props.element ?? fallback.props.children ?? null}</>;
+
+  // Unknown/stale paths should degrade to the generated app's home route,
+  // never a silent blank frame. This commonly happens after a route is
+  // removed by a rollback or a project switch.
+  const home = routes.find((route) => route.props.index || route.props.path === "/");
+  return <>{home?.props.element ?? home?.props.children ?? null}</>;
 }
 
 type AnchorProps = React.AnchorHTMLAttributes<HTMLAnchorElement> & {
@@ -212,7 +219,75 @@ function Navigate({ to = "/", replace }: { to?: string; replace?: boolean }) {
 }
 
 function Outlet() {
+  return useRouter().outlet ?? null;
+}
+
+interface DataRoute {
+  path?: string;
+  index?: boolean;
+  element?: React.ReactNode;
+  Component?: React.ComponentType;
+  children?: DataRoute[];
+  errorElement?: React.ReactNode;
+}
+
+interface PreviewDataRouter {
+  routes: DataRoute[];
+  navigate: typeof previewRouter.navigate;
+}
+
+function routeElement(route: DataRoute): React.ReactNode {
+  return route.element ?? (route.Component ? React.createElement(route.Component) : null);
+}
+
+function joinRoute(parent: string, child: string) {
+  if (child.startsWith("/")) return child;
+  return `${parent.replace(/\/$/, "")}/${child}`.replace(/\/+/g, "/") || "/";
+}
+
+function renderDataRoutes(
+  routes: DataRoute[],
+  path: string,
+  navigate: RouterCtx["navigate"],
+  parentPath = "",
+): React.ReactNode {
+  for (const route of routes) {
+    const pattern = route.index ? (parentPath || "/") : joinRoute(parentPath || "/", route.path ?? "");
+    const child = route.children
+      ? renderDataRoutes(route.children, path, navigate, pattern === "*" ? parentPath : pattern)
+      : null;
+    const params = matchPath(pattern, path);
+    if (!params && child == null) continue;
+    const element = routeElement(route);
+    if (element == null) return child;
+    return (
+      <RouterContext.Provider value={{ path, navigate, params: params ?? {}, outlet: child }}>
+        {element}
+      </RouterContext.Provider>
+    );
+  }
   return null;
+}
+
+function createBrowserRouter(routes: DataRoute[]): PreviewDataRouter {
+  return { routes: Array.isArray(routes) ? routes : [], navigate: previewRouter.navigate };
+}
+
+function RouterProvider({ router }: { router?: PreviewDataRouter }) {
+  const path = React.useSyncExternalStore(
+    previewRouter.subscribe,
+    previewRouter.getPath,
+    previewRouter.getPath,
+  );
+  const navigate = router?.navigate ?? previewRouter.navigate;
+  const routes = router?.routes ?? [];
+  const rendered = renderDataRoutes(routes, path, navigate);
+  const home = rendered ?? renderDataRoutes(routes, "/", navigate);
+  return (
+    <RouterContext.Provider value={{ path, navigate, params: {} }}>
+      {home}
+    </RouterContext.Provider>
+  );
 }
 
 export const reactRouterDom = {
@@ -249,8 +324,10 @@ export const reactRouterDom = {
     const params = matchPath(pattern, path);
     return params ? { params, pathname: path, pathnameBase: path, pattern: { path: pattern } } : null;
   },
-  createBrowserRouter: () => ({}),
-  RouterProvider: MemoryRouter,
+  createBrowserRouter,
+  createHashRouter: createBrowserRouter,
+  createMemoryRouter: createBrowserRouter,
+  RouterProvider,
 };
 
 /* -------------------------------------------------- class-name + animation */
