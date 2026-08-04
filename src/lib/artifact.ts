@@ -97,7 +97,14 @@ export function parseArtifacts(text: string): ArtifactProject[] {
     const next = ARTIFACT_ANY_RE.exec(text);
     const bodyEnd = next ? next.index : text.length;
     const body = text.slice(bodyStart, bodyEnd);
-    ARTIFACT_OPEN_RE.lastIndex = next ? next.index + next[0].length : text.length;
+    // Resume after a real closer; a nested/next opening tag must still be
+    // parsed as its own artifact, so stop right before it.
+    ARTIFACT_OPEN_RE.lastIndex = !next
+      ? text.length
+      : next[0].startsWith("</")
+        ? next.index + next[0].length
+        : next.index;
+
 
     const files: Record<string, string> = {};
     const order: string[] = [];
