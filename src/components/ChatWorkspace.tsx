@@ -1450,10 +1450,25 @@ function ChatWorkspaceInner() {
                     <span className="hidden min-w-0 truncate text-2xs text-ink-400 sm:inline">
                       {ACTION_RULES[actionForMode(mode)].label} ·{" "}
                       <span className="font-medium text-ink-600">
-                        {formatCredits(estimateCost(actionForMode(mode), input.length))}
+                        {formatCredits(estimateCostForWords(actionForMode(mode), budget.words))}
                       </span>{" "}
                       credits {credits.unlimited && "· unlimited"}
                     </span>
+
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-2xs font-medium tabular-nums",
+                        budget.overLimit
+                          ? "bg-destructive/10 text-destructive"
+                          : budget.pct > 80
+                            ? "bg-amber-500/10 text-amber-600"
+                            : "text-ink-400",
+                      )}
+                      aria-live="polite"
+                    >
+                      {budget.words}/{MAX_PROMPT_WORDS} words
+                    </span>
+
 
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       {/* Mode as a compact dropdown, not a tab strip */}
