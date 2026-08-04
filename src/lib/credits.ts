@@ -90,6 +90,16 @@ export const ACTION_RULES: Record<CreditAction, ActionRule> = {
     note: "Compile + run in the sandbox",
     customerNote: "Compile + run in the sandbox",
   },
+  agent_run: {
+    action: "agent_run",
+    label: "Browser agent attempt",
+    base: 0.08,
+    perKChars: 0,
+    tier: "fast",
+    note: "Headless Chromium attempt on the customer's own site",
+    customerNote: "Secure browser session that signs in and inspects your site",
+  },
+
   export: {
     action: "export",
     label: "Export project",
