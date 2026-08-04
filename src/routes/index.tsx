@@ -157,14 +157,17 @@ const PROOF = [
 ];
 
 function LandingPage() {
-  const navigate = useNavigate();
   const [active, setActive] = useState(0);
+  // The home page is public: a signed-in visitor stays here and gets a
+  // "Open workspace" entry point instead of being bounced to /dashboard.
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      setSignedIn(Boolean(data.session));
     });
-  }, [navigate]);
+  }, []);
+
 
   // Highlights one engine at a time in the hero rail, like a slider.
   useEffect(() => {
