@@ -246,14 +246,17 @@ function LandingPage() {
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button asChild size="lg">
-                <Link to="/auth">
-                  Start building free
+                <Link to={signedIn ? "/dashboard" : "/auth"}>
+                  {signedIn ? "Open your workspace" : "Start building free"}
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link to="/auth">Sign in</Link>
+                <Link to={signedIn ? "/projects" : "/auth"}>
+                  {signedIn ? "My projects" : "Sign in"}
+                </Link>
               </Button>
+
             </div>
 
             <dl className="mt-9 grid max-w-lg grid-cols-2 gap-4 sm:grid-cols-4">
