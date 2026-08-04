@@ -150,6 +150,80 @@ export function ResellersTab() {
         ))}
       </div>
 
+      {/* ------------------------------------------- wholesale price list */}
+      <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="font-display text-sm font-bold text-ink-900">
+              Reseller wholesale price list
+            </h3>
+            <p className="text-xs text-ink-500">
+              Flat low price per package, no commission — resellers keep whatever they charge their
+              own customers. Prices below the cost floor are flagged.
+            </p>
+          </div>
+          <label className="block text-xs text-ink-600">
+            Engine cost / credit (USD)
+            <Input
+              value={costPerCredit}
+              onChange={(e) => setCostPerCredit(e.target.value)}
+              inputMode="decimal"
+              className="mt-1 h-9 w-28 font-mono text-sm"
+            />
+          </label>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-xs">
+            <thead className="text-2xs uppercase tracking-wider text-ink-500">
+              <tr>
+                <th className="px-3 py-2">Package</th>
+                <th className="px-3 py-2">Retail</th>
+                <th className="px-3 py-2">Reseller pays</th>
+                <th className="px-3 py-2">Our engine cost</th>
+                <th className="px-3 py-2">We keep</th>
+                <th className="px-3 py-2">Cost floor (never below)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-200/70">
+              {PAID_PLANS.map((plan) => {
+                const wholesaleBdt = resellerPriceBdt(plan.id);
+                const wholesaleUsd = bdtToUsd(wholesaleBdt);
+                const floor = priceFloor(plan.id, cost, wholesaleUsd);
+                return (
+                  <tr key={plan.id} className="text-ink-800">
+                    <td className="px-3 py-2">
+                      <span className="font-semibold text-ink-900">{plan.name}</span>
+                      <span className="ml-1.5 text-ink-500">{plan.credits} cr</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono">{money(Number(plan.price.slice(1)))}</td>
+                    <td className="px-3 py-2 font-mono font-semibold">
+                      {formatBdt(wholesaleBdt)}
+                      <span className="ml-1 text-ink-500">${wholesaleUsd.toFixed(2)}</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono">
+                      {formatBdt(floor.breakEvenBdt)}
+                      <span className="ml-1 text-ink-500">{money(floor.breakEvenUsd)}</span>
+                    </td>
+                    <td className="px-3 py-2 font-mono">
+                      {formatBdt(wholesaleBdt - floor.breakEvenBdt)}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-2xs font-semibold ${FLOOR_STYLE[floor.verdict]}`}
+                      >
+                        {floor.verdict === "loss"
+                          ? `Loss — min ${formatBdt(floor.breakEvenBdt)}`
+                          : `${floor.multiple}× cost · safe ${formatBdt(floor.safeBdt)}`}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       {/* -------------------------------------------------- create a coupon */}
       <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
         <h3 className="font-display text-sm font-bold text-ink-900">New reseller coupon</h3>
