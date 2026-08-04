@@ -12,6 +12,13 @@ import { BrandMark } from "@/components/BrandMark";
 export const Route = createFileRoute("/auth")({
   ssr: false,
   component: AuthPage,
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+    const raw = search["redirect"];
+    // Only same-origin app paths are accepted, never an absolute URL.
+    return typeof raw === "string" && raw.startsWith("/") && !raw.startsWith("//")
+      ? { redirect: raw }
+      : {};
+  },
   head: () => ({
     meta: [
       { title: "Sign in — Nexura AI" },
@@ -41,8 +48,16 @@ const credentials = z.object({
 
 type Mode = "signin" | "signup";
 
+/** Survives the OAuth round trip so social sign-in also honours ?redirect=. */
+const POST_LOGIN_KEY = "nexura:post-login";
+
+function safePath(value: string | null | undefined) {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
 function AuthPage() {
   const navigate = useNavigate();
+  const { redirect: redirectTo } = Route.useSearch();
   const [mode, setMode] = useState<Mode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,14 +65,26 @@ function AuthPage() {
   const [confirmSent, setConfirmSent] = useState(false);
 
   useEffect(() => {
+    // One-shot guard: without it a token refresh (or a second auth event) fires
+    // another navigate and bounces the user back out of the page they landed on.
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      const stored = safePath(sessionStorage.getItem(POST_LOGIN_KEY));
+      sessionStorage.removeItem(POST_LOGIN_KEY);
+      void navigate({ href: safePath(redirectTo) ?? stored ?? "/dashboard", replace: true });
+    };
+
+
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) navigate({ to: "/dashboard", replace: true });
+      if (session) go();
     });
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      if (data.session) go();
     });
     return () => sub.subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, redirectTo]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -96,8 +123,11 @@ function AuthPage() {
 
   async function onGoogle() {
     setBusy(true);
+    // OAuth returns to /auth (public), where the effect above forwards the user
+    // to the page they originally asked for.
+    if (redirectTo) sessionStorage.setItem(POST_LOGIN_KEY, redirectTo);
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
+      redirect_uri: `${window.location.origin}/auth`,
     });
     if (result.error) {
       setBusy(false);
@@ -105,7 +135,7 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    navigate({ to: "/dashboard", replace: true });
+    void navigate({ href: redirectTo ?? "/dashboard", replace: true });
   }
 
   return (
