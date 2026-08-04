@@ -1,5 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { analyzeStack } from "@/lib/stack";
+import { useGitHubAutoPush } from "@/hooks/useGitHubAutoPush";
+
 
 import { ShipDialog } from "@/components/ShipDialog";
 import {
