@@ -374,17 +374,6 @@ export async function callChatCompletion(
     guard.done();
   }
 
-    choices?: Array<{
-      finish_reason?: string;
-      native_finish_reason?: string;
-      message?: {
-        content?: string;
-        images?: Array<{ image_url?: { url?: string }; type?: string }>;
-      };
-    }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; cost?: number };
-    error?: { message?: string };
-  };
   if (data.error?.message) {
     throw new Error(`[openrouter:${upstreamModel}] ${data.error.message}`);
   }
