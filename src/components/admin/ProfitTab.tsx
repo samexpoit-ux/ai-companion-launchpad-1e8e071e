@@ -235,7 +235,11 @@ export function ProfitTab() {
         loading={loading}
         showRank
       />
+
+      {/* Package / reseller break-even, seeded with the measured cost per credit. */}
+      <PackageEconomicsPanel costPerCredit={summary.costPerCredit} />
     </div>
+
   );
 }
 
