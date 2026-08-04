@@ -1002,7 +1002,10 @@ function ChatWorkspaceInner() {
               {query.trim() ? "No conversation matches that search." : "No conversations yet."}
             </p>
           )}
+            </div>
+          </div>
         </div>
+
 
         {/* Credits */}
         <div className="px-3 pb-1">
