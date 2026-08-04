@@ -335,6 +335,35 @@ function pickComponent(exports: Record<string, unknown>): React.ComponentType | 
     | undefined;
 }
 
+const BOOTSTRAP = /(^|\/)(main|index|entry|bootstrap|client)\.(t|j)sx?$/;
+const RENDERABLE = /\.(t|j)sx$/;
+
+/**
+ * Pick the module we should render.
+ *
+ * Bootstrap files (`main.tsx`, `index.tsx`) call `createRoot` themselves and
+ * export nothing, so rendering them left a blank frame and a phantom build
+ * error. Prefer a real component module and keep the declared entry as the
+ * fallback.
+ */
+function pickRenderEntry(files: Record<string, string>, entry?: string): string {
+  const paths = Object.keys(files);
+  const isRenderable = (p?: string): p is string =>
+    !!p && p in files && RENDERABLE.test(p) && !BOOTSTRAP.test(p);
+
+  if (isRenderable(entry)) return entry;
+
+  const app = paths.find((p) => /(^|\/)App\.(t|j)sx?$/.test(p));
+  if (app) return app;
+
+  const page =
+    paths.find((p) => /(^|\/)(pages|routes|app)\/.*index\.(t|j)sx$/i.test(p)) ??
+    paths.find((p) => isRenderable(p) && /export\s+default/.test(files[p] ?? "")) ??
+    paths.find((p) => isRenderable(p));
+  return page ?? entry ?? paths[0] ?? "";
+}
+
+
 interface Props {
   payload: PreviewPayload;
   device: PreviewDevice;
