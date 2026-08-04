@@ -15,7 +15,7 @@ import {
   type PaymentRow,
 } from "@/lib/admin-api";
 import { PLANS, planById } from "@/lib/plans";
-import { HeroStrip, Panel, Pill } from "@/components/admin/ui";
+import { HeroStrip, Pill } from "@/components/admin/ui";
 import { normalizeCouponCode, quoteCoupon, couponStatus, type Coupon } from "@/lib/resellers";
 
 const STATUSES = ["all", "pending", "paid", "refunded", "failed"] as const;
