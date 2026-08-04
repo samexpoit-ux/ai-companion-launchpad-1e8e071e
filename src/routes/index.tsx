@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
@@ -157,14 +157,17 @@ const PROOF = [
 ];
 
 function LandingPage() {
-  const navigate = useNavigate();
   const [active, setActive] = useState(0);
+  // The home page is public: a signed-in visitor stays here and gets a
+  // "Open workspace" entry point instead of being bounced to /dashboard.
+  const [signedIn, setSignedIn] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: "/dashboard", replace: true });
+      setSignedIn(Boolean(data.session));
     });
-  }, [navigate]);
+  }, []);
+
 
   // Highlights one engine at a time in the hero rail, like a slider.
   useEffect(() => {
@@ -201,7 +204,10 @@ function LandingPage() {
               Pricing
             </a>
             <Button asChild size="sm">
-              <Link to="/auth">Start free</Link>
+              <Link to={signedIn ? "/dashboard" : "/auth"}>
+                {signedIn ? "Open workspace" : "Start free"}
+              </Link>
+
             </Button>
           </nav>
         </div>
@@ -240,14 +246,17 @@ function LandingPage() {
 
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Button asChild size="lg">
-                <Link to="/auth">
-                  Start building free
+                <Link to={signedIn ? "/dashboard" : "/auth"}>
+                  {signedIn ? "Open your workspace" : "Start building free"}
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link to="/auth">Sign in</Link>
+                <Link to={signedIn ? "/projects" : "/auth"}>
+                  {signedIn ? "My projects" : "Sign in"}
+                </Link>
               </Button>
+
             </div>
 
             <dl className="mt-9 grid max-w-lg grid-cols-2 gap-4 sm:grid-cols-4">

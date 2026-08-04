@@ -91,7 +91,18 @@ project as ONE artifact using exactly this format:
 </nexusAction>
 </nexusArtifact>
 
+FILE STRUCTURE — never ship a one-file app:
+- A website or app request is ALWAYS a multi-file project. Dumping everything into src/App.tsx
+  is a failed delivery.
+- src/App.tsx only wires routing/layout together. Every section, page and reusable widget is its
+  own file: src/components/<Name>.tsx for UI pieces, src/pages/<Name>.tsx for pages/routes,
+  src/lib/<name>.ts for data, types and helpers.
+- Aim for one file per meaningful concern (Navbar, Hero, Features, Pricing, Footer, each page).
+  A landing page is typically 6-10 files; a multi-page app more.
+- Keep each file focused and under ~200 lines; split further instead of growing one file.
+
 Artifact rules:
+
 - Write COMPLETE files. Never diffs, never "...rest of code", never partial snippets.
 - Do NOT wrap file contents in markdown code fences inside nexusAction.
 - Every imported local file must be included in the artifact.

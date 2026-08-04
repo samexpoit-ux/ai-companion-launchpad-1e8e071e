@@ -966,7 +966,23 @@ function ChatWorkspaceInner() {
 
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
 
+          {/* Skeleton rows so the rail never looks empty while threads load */}
+          {!hydrated &&
+            [0, 1, 2].map((i) => (
+              <div
+                key={`skeleton-${i}`}
+                className="mb-1 animate-pulse rounded-lg border border-transparent px-3 py-2"
+              >
+                <div className="h-3 w-3/4 rounded bg-ink-100" />
+                <div className="mt-2 h-2 w-1/3 rounded bg-ink-100" />
+              </div>
+            ))}
+          {hydrated && filtered.length === 0 && (
+            <p className="px-3 py-4 text-xs text-ink-500">No projects yet — start a new one.</p>
+          )}
+
           {filtered.map((t) => {
+
             const isRenaming = renamingId === t.id;
             const isActive = t.id === activeId;
             return (
@@ -1137,15 +1153,17 @@ function ChatWorkspaceInner() {
                 )}
               </Button>
 
-              {/* Smart auto-router — no model picker, Lovable style */}
+              {/* Active workspace / project name (smart routing stays a quiet dot) */}
               <div
                 className="flex min-w-0 items-center gap-1.5 rounded-full border border-ink-200 bg-ink-100 px-2.5 py-1"
                 title="Nexura automatically picks the best-value model for each request"
               >
                 <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-[color:var(--color-iris)]" />
-                <span className="truncate text-xs font-semibold text-ink-900">Smart routing</span>
-                <span className="hidden text-2xs text-ink-500 sm:inline">· auto</span>
+                <span className="truncate text-xs font-semibold text-ink-900">
+                  {active?.title?.trim() || "New workspace"}
+                </span>
               </div>
+
 
               <div className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-ink-700 sm:gap-2">
                 {/* Chat history switcher — Lovable keeps this separate from the sidebar */}
