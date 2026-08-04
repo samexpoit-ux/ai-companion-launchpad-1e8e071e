@@ -24,6 +24,9 @@ import {
   connectGitHub,
   disconnectGitHub,
   getGitHubConnection,
+  getGitHubOAuthStatus,
+  linkGitHubRepo,
+  startGitHubOAuth,
   pushToConnectedRepo,
   setGitHubAutoPush,
   type GitHubConnection,
@@ -45,6 +48,9 @@ export function ShipDialog({
   const disconnect = useServerFn(disconnectGitHub);
   const readConnection = useServerFn(getGitHubConnection);
   const toggleAuto = useServerFn(setGitHubAutoPush);
+  const readOAuthStatus = useServerFn(getGitHubOAuthStatus);
+  const startOAuth = useServerFn(startGitHubOAuth);
+  const linkRepo = useServerFn(linkGitHubRepo);
 
   const [zipping, setZipping] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,6 +65,21 @@ export function ShipDialog({
     files: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [oauth, setOauth] = useState<{ configured: boolean } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    void readOAuthStatus({})
+      .then((s) => {
+        if (mounted) setOauth({ configured: s.configured });
+      })
+      .catch(() => {
+        if (mounted) setOauth({ configured: false });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [readOAuthStatus]);
 
   useEffect(() => {
     let mounted = true;
@@ -116,6 +137,60 @@ export function ShipDialog({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not connect the repository.");
     } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Lovable-style connect: open GitHub's authorize screen in a popup, wait for
+   * the callback to report success, then create/attach the repository and push.
+   */
+  const doOAuthConnect = async () => {
+    if (!payload) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+
+    const popup = window.open("", "nexura-github", "width=980,height=760");
+    try {
+      const { url } = await startOAuth({ data: { origin: window.location.origin } });
+      if (popup) popup.location.href = url;
+      else window.location.href = url;
+
+      const authorized = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        const timer = window.setInterval(() => {
+          if (popup?.closed) {
+            window.clearInterval(timer);
+            window.removeEventListener("message", onMessage);
+            resolve({ ok: false, error: "The GitHub window was closed before finishing." });
+          }
+        }, 600);
+        function onMessage(event: MessageEvent) {
+          const data = event.data as { type?: string; ok?: boolean; error?: string } | null;
+          if (!data || data.type !== "nexura:github-oauth") return;
+          window.clearInterval(timer);
+          window.removeEventListener("message", onMessage);
+          resolve({ ok: Boolean(data.ok), ...(data.error ? { error: data.error } : {}) });
+        }
+        window.addEventListener("message", onMessage);
+      });
+
+      if (!authorized.ok) throw new Error(authorized.error ?? "GitHub authorization failed.");
+
+      const conn = await linkRepo({
+        data: {
+          repo: repo.trim() || slugify(payload.title),
+          owner: owner.trim() || undefined,
+          private: true,
+          autoPush: true,
+        },
+      });
+      setConnection(conn);
+      await doPush(conn);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not connect GitHub.");
+    } finally {
+      popup?.close();
       setBusy(false);
     }
   };
