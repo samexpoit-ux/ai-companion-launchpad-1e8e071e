@@ -264,6 +264,43 @@ export function ShipDialog({
                   Disconnect repository
                 </Button>
               </>
+            ) : oauth?.configured ? (
+              <>
+                <div className="rounded-md border border-border bg-muted/40 p-3">
+                  <p className="text-sm font-medium">Connect to GitHub</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Authorize Nexura AI on your own GitHub account. We create the repository for
+                    you and keep it in sync — nothing to copy or paste.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-owner">Owner / org (optional)</Label>
+                    <Input
+                      id="gh-owner"
+                      placeholder="your-username"
+                      value={owner}
+                      onChange={(e) => setOwner(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-repo">Repository</Label>
+                    <Input id="gh-repo" value={repo} onChange={(e) => setRepo(e.target.value)} />
+                  </div>
+                </div>
+                <Button
+                  onClick={() => void doOAuthConnect()}
+                  disabled={!payload || busy}
+                  className="w-full"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Github className="mr-2 h-4 w-4" />
+                  )}
+                  {busy ? "Waiting for GitHub…" : "Connect to GitHub"}
+                </Button>
+              </>
             ) : (
               <>
                 <div className="space-y-1.5">
@@ -277,8 +314,8 @@ export function ShipDialog({
                     onChange={(e) => setToken(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Stored encrypted on the server so later pushes are one click. Never exposed to
-                    the browser.
+                    One-click GitHub sign-in is not configured on this server yet, so paste a token
+                    instead. It is stored encrypted and never exposed to the browser.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -310,6 +347,7 @@ export function ShipDialog({
                 </Button>
               </>
             )}
+
 
             {error && <p className="text-sm text-destructive">{error}</p>}
             {result && (
