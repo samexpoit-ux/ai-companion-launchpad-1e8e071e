@@ -30,8 +30,10 @@ export interface EconomicsInput {
 
 export const DEFAULT_ECONOMICS: EconomicsInput = {
   costPerCredit: 0.012,
+  // Resellers buy a flat low wholesale price and keep 100% of their own margin,
+  // so we pay no commission (0%). The discount is the wholesale gap.
   resellerDiscountPct: 20,
-  commissionPct: 10,
+  commissionPct: 0,
   monthlyFixedUsd: 120,
   utilisation: 0.85,
 };

@@ -138,8 +138,13 @@ export function clampChainToCeiling(
   ceiling: "free" | "cheap" | "premium",
 ): string[] {
   if (ceiling === "premium") return [...chain];
-  const blocked = ceiling === "free" ? [...PREMIUM_MODELS, ...CHEAP_MODELS] : PREMIUM_MODELS;
-  const allowed = chain.filter((m) => !blocked.includes(m));
+  if (ceiling === "free") {
+    // Free accounts get EVERY free engine: keep the tier's own free picks first
+    // (they match the task), then append the rest of the free pool as fallbacks.
+    const preferred = chain.filter((m) => FREE_MODELS.includes(m));
+    return [...new Set([...preferred, ...FREE_MODELS])];
+  }
+  const allowed = chain.filter((m) => !PREMIUM_MODELS.includes(m));
   if (allowed.length > 0) return allowed;
   // Nothing survived the clamp: fall back to the strongest free models so a
   // free / out-of-credit account still gets a good answer instead of an error.

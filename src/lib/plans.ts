@@ -35,6 +35,25 @@ export const MIN_PACKAGE_CREDITS = 200;
 /** Smallest credit top-up an admin or customer can buy. */
 export const MIN_TOPUP_CREDITS = 100;
 
+/**
+ * Reseller price list in BDT — what a reseller pays *us* per package.
+ * Resellers get a low flat wholesale price and keep **all** of the upside:
+ * they resell at whatever price they want and we pay no commission.
+ * Admins can override these per coupon (the reseller tab warns if an override
+ * drops under the safe cost floor).
+ */
+export const RESELLER_BDT: Record<PlanId, number> = {
+  free: 0,
+  starter: 400,
+  growth: 450,
+  scale: 750,
+  max: 1200,
+};
+
+export function resellerPriceBdt(id: string | null | undefined): number {
+  return RESELLER_BDT[planById(id).id] ?? 0;
+}
+
 export const PLANS: Plan[] = [
   {
     id: "free",

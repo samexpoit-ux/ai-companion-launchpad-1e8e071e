@@ -39,6 +39,56 @@ export class CreditError extends Error {
   }
 }
 
+/**
+ * Headers a legitimate Nexura client never sends. Their presence means someone
+ * is trying to talk the billing layer into a free (or cheaper) request — an
+ * extension, a patched bundle or a scripted client. This is a hard signal.
+ */
+const FORGED_BILLING_HEADERS = [
+  "x-nexura-credits",
+  "x-nexura-credit-override",
+  "x-nexura-unlimited",
+  "x-nexura-plan",
+  "x-nexura-admin",
+  "x-credits",
+  "x-credit-override",
+  "x-unlimited",
+  "x-bypass-credits",
+  "x-skip-billing",
+];
+
+function forgedBillingHeader(request: Request): string | null {
+  for (const name of FORGED_BILLING_HEADERS) {
+    if (request.headers.get(name) != null) return name;
+  }
+  return null;
+}
+
+type Client = ReturnType<typeof createClient>;
+
+/**
+ * Records an abuse attempt for the caller and returns true when the account was
+ * suspended. Suspension is immediate and silent — no warning e-mail, no grace
+ * period — exactly as the anti-bypass policy requires.
+ */
+async function recordAbuse(
+  supabase: Client,
+  kind: string,
+  severity: "hard" | "soft",
+  details: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const { data } = await supabase.rpc("record_abuse_attempt", {
+      _kind: kind,
+      _severity: severity,
+      _details: details,
+    });
+    return (data as { suspended?: boolean } | null)?.suspended === true;
+  } catch {
+    return false;
+  }
+}
+
 function bearer(request: Request): string | null {
   const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
   if (!header) return null;
@@ -86,6 +136,16 @@ export async function chargeRequest(
     );
   }
 
+  // Hard bypass signal: forged billing headers suspend the account on the spot.
+  const forged = forgedBillingHeader(request);
+  if (forged) {
+    await recordAbuse(supabase, "forged_billing_header", "hard", { header: forged, action });
+    throw new CreditError(
+      "unauthenticated",
+      "This account has been suspended for attempting to bypass the credit system.",
+    );
+  }
+
   const cost = usageReservationCost(action, opts.inputChars ?? 0);
 
   // Admins are never blocked by a balance, but still get a normal ledger row
@@ -130,10 +190,29 @@ export async function chargeRequest(
     const msg = error.message ?? "Credit check failed";
     if (/insufficient credits/i.test(msg)) {
       const remaining = Number(/([\d.]+) remaining/.exec(msg)?.[1] ?? 0);
+      // Out of credits is normal once. Repeated blocked billable calls inside a
+      // short window are a script hammering the limit, so the routine suspends.
+      const suspended = await recordAbuse(supabase, "credit_limit_retry", "soft", {
+        action,
+        cost,
+        remaining,
+      });
+      if (suspended) {
+        throw new CreditError(
+          "unauthenticated",
+          "This account has been suspended for repeatedly trying to run past its credit limit.",
+        );
+      }
       throw new CreditError(
         "insufficient_credits",
         `This ${ACTION_RULES[action].label.toLowerCase()} costs ${cost} credits but only ${remaining} remain.`,
         remaining,
+      );
+    }
+    if (/account_suspended/i.test(msg)) {
+      throw new CreditError(
+        "unauthenticated",
+        "This account is suspended. Contact support to restore access.",
       );
     }
     if (/not authenticated|not allowed|jwt|token/i.test(msg)) {
