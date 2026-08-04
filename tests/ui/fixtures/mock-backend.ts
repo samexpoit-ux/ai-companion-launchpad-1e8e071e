@@ -147,7 +147,16 @@ export async function installMockBackend(
       // Writes are accepted and echoed back so optimistic UI keeps working.
       const body = route.request().postDataJSON?.() ?? {};
       if (path.startsWith("chat_threads") && !Array.isArray(body)) {
-        return json(route, [{ id: "00000000-0000-4000-8000-0000000000bb", ...body }], 201);
+        return json(
+          route,
+          {
+            id: "00000000-0000-4000-8000-0000000000bb",
+            last_message_at: "2026-08-04T00:00:00Z",
+            created_at: "2026-08-04T00:00:00Z",
+            ...body,
+          },
+          201,
+        );
       }
       return json(route, Array.isArray(body) ? body : [body], 201);
     }
