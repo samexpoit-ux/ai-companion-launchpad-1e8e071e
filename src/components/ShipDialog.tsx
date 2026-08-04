@@ -29,6 +29,9 @@ import {
   type GitHubConnection,
 } from "@/lib/github.functions";
 import { buildShipFiles, slugify, type ShipPayload } from "@/lib/ship-bundle";
+import { GitHubStatusPanel } from "@/components/GitHubStatusPanel";
+import { markPushFailed, markPushStarted, markPushSucceeded } from "@/lib/github-status";
+
 
 export function ShipDialog({
   payload,
@@ -122,6 +125,7 @@ export function ShipDialog({
     setBusy(true);
     setError(null);
     setResult(null);
+    markPushStarted(false);
     try {
       const res = await push({
         data: {
@@ -130,6 +134,13 @@ export function ShipDialog({
         },
       });
       setResult(res);
+      const active = conn ?? connection;
+      markPushSucceeded({
+        commit: res.commit,
+        files: res.files,
+        branch: res.branch,
+        ...(active?.owner ? { repo: `${active.owner}/${active.repo}` } : {}),
+      });
       setConnection({
         ...(conn ?? connection ?? { connected: true }),
         connected: true,
@@ -137,11 +148,14 @@ export function ShipDialog({
         lastPushedAt: new Date().toISOString(),
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "GitHub push failed.");
+      const message = e instanceof Error ? e.message : "GitHub push failed.";
+      setError(message);
+      markPushFailed(message);
     } finally {
       setBusy(false);
     }
   };
+
 
   const doDisconnect = async () => {
     setBusy(true);
@@ -206,24 +220,12 @@ export function ShipDialog({
           <TabsContent value="github" className="space-y-3 pt-4">
             {connection?.connected ? (
               <>
-                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-                  <p className="font-medium">Connected as {connection.login}</p>
-                  <a
-                    href={connection.repoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-0.5 inline-flex items-center gap-1 text-primary underline"
-                  >
-                    {connection.owner}/{connection.repo} · {connection.branch}
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                  {connection.lastPushedAt && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Last push {new Date(connection.lastPushedAt).toLocaleString()}
-                      {connection.lastCommit ? ` (${connection.lastCommit})` : ""}
-                    </p>
-                  )}
-                </div>
+                <GitHubStatusPanel
+                  connection={connection}
+                  busy={busy}
+                  onRetry={() => void doPush()}
+                />
+
                 <div className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                   <div>
                     <Label htmlFor="gh-auto" className="text-sm">

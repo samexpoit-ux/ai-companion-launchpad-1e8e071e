@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bot,
-  Camera,
   Clock,
   KeyRound,
   Loader2,
@@ -20,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { PageBar, PageBody, PageHeader, PageSection, PageShell } from "@/components/page-shell";
 import { supabase } from "@/integrations/supabase/client";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { AgentScreenshotGallery } from "@/components/AgentScreenshotGallery";
 import {
   AGENT_APPROVAL_PHRASE,
   AGENT_ATTEMPTS,
@@ -720,31 +720,8 @@ function SessionCard({
             )}
           </ol>
 
-          {shots.length > 0 ? (
-            <>
-              <h4 className="mt-4 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
-                <Camera className="h-3.5 w-3.5" /> Screenshots
-              </h4>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                {shots.map((shot) => (
-                  <figure
-                    key={shot.id}
-                    className="overflow-hidden rounded-lg border border-ink-200 bg-white"
-                  >
-                    <img
-                      src={shot.data_url}
-                      alt={shot.caption ?? `Agent screenshot (${shot.kind})`}
-                      loading="lazy"
-                      className="w-full"
-                    />
-                    <figcaption className="px-3 py-2 text-xs text-ink-500">
-                      {shot.caption ?? shot.kind} · try {shot.attempt}
-                    </figcaption>
-                  </figure>
-                ))}
-              </div>
-            </>
-          ) : null}
+          <AgentScreenshotGallery shots={shots} />
+
         </div>
       ) : null}
     </li>

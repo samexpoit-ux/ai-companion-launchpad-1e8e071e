@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
-  Layers,
   MoreHorizontal,
   Pencil,
   Search,
@@ -23,6 +22,7 @@ import { listSharedThreadIds, listStarredThreadIds, setThreadStar } from "@/lib/
 import { ShareDialog } from "@/components/ShareDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { ProjectThumbnail } from "@/components/ProjectThumbnail";
 
 export const Route = createFileRoute("/_authenticated/projects")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -47,22 +47,6 @@ const FILTERS = [
   { id: "owned", label: "Owned by me" },
   { id: "shared", label: "Shared with me" },
 ] as const;
-
-/** Deterministic accent per project so the grid reads colourful, not grey. */
-const ACCENTS = [
-  "linear-gradient(135deg, #3B82F6, #93B4FA)",
-  "linear-gradient(135deg, #7C3AED, #C084FC)",
-  "linear-gradient(135deg, #059669, #5EEAD4)",
-  "linear-gradient(135deg, #F59E0B, #FCD34D)",
-  "linear-gradient(135deg, #E11D48, #FB7185)",
-  "linear-gradient(135deg, #0EA5E9, #67E8F9)",
-];
-
-function accentFor(id: string) {
-  let sum = 0;
-  for (let i = 0; i < id.length; i += 1) sum += id.charCodeAt(i);
-  return ACCENTS[sum % ACCENTS.length];
-}
 
 function ProjectsPage() {
   const { filter } = Route.useSearch();
@@ -209,12 +193,7 @@ function ProjectsPage() {
                     search={{ thread: thread.id }}
                     className="block focus-visible:outline-none"
                   >
-                    <div
-                      className="relative grid h-28 place-items-center"
-                      style={{ background: accentFor(thread.id) }}
-                    >
-                      <Layers className="h-7 w-7 text-white opacity-90" aria-hidden="true" />
-                    </div>
+                    <ProjectThumbnail threadId={thread.id} />
                     <div className="p-4">
                       <p className="truncate text-sm font-semibold text-ink-900">{thread.title}</p>
                       <p className="mt-1 text-xs text-ink-500">
