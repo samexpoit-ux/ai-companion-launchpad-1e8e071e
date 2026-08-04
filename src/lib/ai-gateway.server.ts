@@ -450,8 +450,19 @@ export async function runWithFallback(
     }
 
     const started = Date.now();
+    // Never let one attempt (or its continuation passes) overrun the whole
+    // request budget — the user must get a real answer or a real error.
+    const remaining = () => Math.max(0, deadline - Date.now());
     try {
-      let out = await callChatCompletion(route.config, model, messages, route.task, signal);
+      let out = await callChatCompletion(
+        route.config,
+        model,
+        messages,
+        route.task,
+        signal,
+        remaining(),
+      );
+
       ran += 1;
       if (out.content.trim()) {
         // Build mode is a delivery contract, not a normal chat answer.
