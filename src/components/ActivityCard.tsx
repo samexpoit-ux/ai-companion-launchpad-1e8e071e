@@ -1,5 +1,16 @@
 import { useState } from "react";
-import { Check, ChevronDown, Coins, Loader2, Eye, ListTree, FileCode2 } from "lucide-react";
+import {
+  BrainCircuit,
+  Check,
+  ChevronDown,
+  Coins,
+  Eye,
+  FileCode2,
+  ListTree,
+  Loader2,
+  PanelRight,
+} from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { usePreview } from "@/components/preview-context";
 import type { ArtifactProject } from "@/lib/artifact";
