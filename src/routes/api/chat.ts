@@ -98,12 +98,14 @@ export const Route = createFileRoute("/api/chat")({
         // ---- word budget (pricing is word-based, so the cap is authoritative) ----
         const promptWords = countWords(lastUser?.content ?? "");
         if (promptWords > MAX_PROMPT_WORDS) {
-          return apiError(
-            "invalid_request",
+          return apiErrorResponse(
+            "bad_request",
+            "chat",
             `This prompt is ${promptWords} words. Keep a single message under ${MAX_PROMPT_WORDS} words — split larger specs into follow-up messages.`,
-            { status: 400 },
+            { words: promptWords, limit: MAX_PROMPT_WORDS },
           );
         }
+
 
 
 
