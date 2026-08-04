@@ -203,7 +203,9 @@ export function EmptyState({
         </span>
       )}
       <p className="mt-3 font-display text-sm font-semibold tracking-tight text-ink-900">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-500">{description}</p>}
+      {description && (
+        <p className="mt-1 max-w-sm text-xs leading-relaxed text-ink-500">{description}</p>
+      )}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -232,5 +234,84 @@ export function Pill({
     >
       {children}
     </span>
+  );
+}
+
+/* ---------------------------------------------------------------- hero strip */
+
+/**
+ * Gradient headline strip.
+ *
+ * The Profit & margin tab's colour language (deep iris gradient, soft orchid
+ * glow, white-on-gradient numbers) is the house style for the console, so every
+ * tab opens with this same strip instead of a flat white box.
+ */
+export function HeroStrip({
+  eyebrow,
+  title,
+  subtitle,
+  icon: Icon,
+  stats,
+  actions,
+  className,
+}: {
+  eyebrow?: string;
+  title: string;
+  subtitle?: string;
+  icon?: LucideIcon;
+  /** Small figures rendered on the right of the strip. */
+  stats?: { label: string; value: string }[];
+  actions?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={cn(
+        "relative overflow-hidden rounded-3xl p-5 text-[color:var(--color-iris-fg)] shadow-ds-lg sm:p-6",
+        className,
+      )}
+      style={{ background: "var(--admin-gradient)" }}
+    >
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full opacity-40 blur-3xl"
+        style={{ background: "var(--premium-gradient)" }}
+      />
+      <div className="relative flex flex-wrap items-center gap-4">
+        {Icon && (
+          <span
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl ring-1 ring-inset ring-white/20"
+            style={{ background: "var(--premium-gradient)" }}
+          >
+            <Icon className="h-5 w-5" aria-hidden />
+          </span>
+        )}
+        <div className="min-w-0">
+          {eyebrow && (
+            <p className="text-2xs font-semibold uppercase tracking-wider text-white/55">
+              {eyebrow}
+            </p>
+          )}
+          <h2 className="mt-0.5 font-display text-2xl font-semibold tracking-tight sm:text-3xl">
+            {title}
+          </h2>
+          {subtitle && <p className="mt-1 max-w-xl text-xs text-white/65">{subtitle}</p>}
+        </div>
+        {stats && stats.length > 0 && (
+          <dl className="ml-auto flex flex-wrap gap-2">
+            {stats.map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl bg-white/10 px-3 py-2 ring-1 ring-inset ring-white/15"
+              >
+                <dt className="text-2xs uppercase tracking-wider text-white/55">{stat.label}</dt>
+                <dd className="font-display text-base font-semibold">{stat.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
+      </div>
+    </section>
   );
 }

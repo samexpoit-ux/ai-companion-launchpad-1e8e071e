@@ -45,13 +45,22 @@ export const MIN_TOPUP_CREDITS = 100;
 export const RESELLER_BDT: Record<PlanId, number> = {
   free: 0,
   starter: 400,
-  growth: 450,
-  scale: 750,
-  max: 1200,
+  growth: 600,
+  scale: 1100,
+  max: 1800,
 };
 
-export function resellerPriceBdt(id: string | null | undefined): number {
-  return RESELLER_BDT[planById(id).id] ?? 0;
+/** Admin-editable overrides (persisted in `platform_settings.reseller_pricing`). */
+export type ResellerPriceOverrides = Partial<Record<PlanId, number>>;
+
+export function resellerPriceBdt(
+  id: string | null | undefined,
+  overrides?: ResellerPriceOverrides | null,
+): number {
+  const planId = planById(id).id;
+  const override = overrides?.[planId];
+  if (typeof override === "number" && override > 0) return override;
+  return RESELLER_BDT[planId] ?? 0;
 }
 
 export const PLANS: Plan[] = [

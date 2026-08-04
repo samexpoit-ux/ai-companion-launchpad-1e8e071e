@@ -1,18 +1,37 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Percent, Plus, ShieldCheck, Trash2, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Coins,
+  Percent,
+  Plus,
+  Save,
+  ShieldCheck,
+  Ticket,
+  Trash2,
+  Users,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createCoupon,
   deleteCoupon,
+  fetchResellerPrices,
+  saveResellerPrices,
   listCouponRedemptions,
   listCoupons,
   saveCoupon,
   type CouponRedemptionRow,
 } from "@/lib/admin-api";
-import { PAID_PLANS, planById, resellerPriceBdt } from "@/lib/plans";
+import {
+  PAID_PLANS,
+  planById,
+  resellerPriceBdt,
+  type PlanId,
+  type ResellerPriceOverrides,
+} from "@/lib/plans";
+import { EmptyState, HeroStrip, Panel, StatCard } from "@/components/admin/ui";
 import { useCurrency } from "@/components/admin/currency";
 import { bdtToUsd, formatBdt, usdToBdt } from "@/lib/currency";
 import { DEFAULT_ECONOMICS } from "@/lib/package-economics";
@@ -56,14 +75,29 @@ export function ResellersTab() {
   const [busy, setBusy] = useState<string | null>(null);
   const { money, currency } = useCurrency();
   const [costPerCredit, setCostPerCredit] = useState(String(DEFAULT_ECONOMICS.costPerCredit));
+  // Admin-entered wholesale price list (BDT per package), persisted in settings.
+  const [prices, setPrices] = useState<ResellerPriceOverrides>({});
+  const [priceDraft, setPriceDraft] = useState<Record<string, string>>({});
+  const [savingPrices, setSavingPrices] = useState(false);
+  const wholesaleBdtFor = (id: string) => resellerPriceBdt(id, prices);
   const usd = (cents: number) => money(cents / 100);
   const cost = Number(costPerCredit) > 0 ? Number(costPerCredit) : DEFAULT_ECONOMICS.costPerCredit;
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [coupons, reds] = await Promise.all([listCoupons(), listCouponRedemptions()]);
+    const [coupons, reds, priceList] = await Promise.all([
+      listCoupons(),
+      listCouponRedemptions(),
+      fetchResellerPrices(),
+    ]);
     setRows(coupons);
     setRedemptions(reds);
+    setPrices(priceList);
+    setPriceDraft(
+      Object.fromEntries(
+        PAID_PLANS.map((plan) => [plan.id, String(resellerPriceBdt(plan.id, priceList))]),
+      ),
+    );
     setLoading(false);
   }, []);
 
@@ -114,6 +148,38 @@ export function ResellersTab() {
     }
   };
 
+  const savePrices = async () => {
+    const next: ResellerPriceOverrides = {};
+    for (const plan of PAID_PLANS) {
+      const value = Number(priceDraft[plan.id] ?? "0");
+      if (!Number.isFinite(value) || value <= 0) {
+        toast.error(`Enter a valid BDT price for ${plan.name}`);
+        return;
+      }
+      next[plan.id as PlanId] = Math.round(value);
+    }
+    const losing = PAID_PLANS.find(
+      (plan) => priceFloor(plan.id, cost, bdtToUsd(next[plan.id as PlanId]!)).verdict === "loss",
+    );
+    if (
+      losing &&
+      !window.confirm(
+        `${losing.name} is priced below our engine cost — save anyway? This sells at a loss.`,
+      )
+    )
+      return;
+    setSavingPrices(true);
+    try {
+      await saveResellerPrices(next);
+      setPrices(next);
+      toast.success("Reseller price list saved");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save prices");
+    } finally {
+      setSavingPrices(false);
+    }
+  };
+
   const totals = useMemo(() => {
     const paid = redemptions.reduce((s, r) => s + r.paidCents, 0);
     const commission = redemptions.reduce((s, r) => s + r.commissionCents, 0);
@@ -135,50 +201,93 @@ export function ResellersTab() {
 
   return (
     <div className="space-y-6">
+      <HeroStrip
+        eyebrow="Reseller programme"
+        title={`${totals.sales} reseller sales · ${usd(totals.net)} net`}
+        subtitle="Flat wholesale prices in BDT, zero commission — resellers keep whatever they charge their own customers."
+        icon={Ticket}
+        stats={[
+          { label: "Resellers", value: String(totals.resellers) },
+          { label: "Gross paid", value: usd(totals.paid) },
+          { label: "Commission", value: usd(totals.commission) },
+        ]}
+      />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {[
-          { label: "Resellers", value: String(totals.resellers), icon: Users },
-          { label: "Coupon sales", value: String(totals.sales), icon: Percent },
-          { label: "Gross paid", value: usd(totals.paid), icon: Percent },
-          { label: "Commission owed", value: usd(totals.commission), icon: Percent },
-          { label: "Net to us", value: usd(totals.net), icon: Percent },
+          {
+            label: "Resellers",
+            value: String(totals.resellers),
+            icon: Users,
+            accent: "var(--color-iris)",
+          },
+          {
+            label: "Coupon sales",
+            value: String(totals.sales),
+            icon: Ticket,
+            accent: "var(--color-orchid)",
+          },
+          {
+            label: "Gross paid",
+            value: usd(totals.paid),
+            icon: Coins,
+            accent: "var(--color-mint)",
+          },
+          {
+            label: "Commission owed",
+            value: usd(totals.commission),
+            icon: Percent,
+            accent: "var(--color-sun)",
+          },
+          {
+            label: "Net to us",
+            value: usd(totals.net),
+            icon: Coins,
+            accent: "var(--color-iris-cyan)",
+          },
         ].map((card) => (
-          <div key={card.label} className="rounded-2xl border border-ink-200 bg-white/80 p-4">
-            <p className="text-2xs uppercase tracking-wider text-ink-500">{card.label}</p>
-            <p className="mt-1 font-display text-xl font-bold text-ink-900">{card.value}</p>
-          </div>
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            accent={card.accent}
+          />
         ))}
       </div>
 
       {/* ------------------------------------------- wholesale price list */}
-      <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h3 className="font-display text-sm font-bold text-ink-900">
-              Reseller wholesale price list
-            </h3>
-            <p className="text-xs text-ink-500">
-              Flat low price per package, no commission — resellers keep whatever they charge their
-              own customers. Prices below the cost floor are flagged.
-            </p>
-          </div>
-          <label className="block text-xs text-ink-600">
-            Engine cost / credit (USD)
-            <Input
-              value={costPerCredit}
-              onChange={(e) => setCostPerCredit(e.target.value)}
-              inputMode="decimal"
-              className="mt-1 h-9 w-28 font-mono text-sm"
-            />
-          </label>
-        </div>
+      <Panel
+        title="Reseller wholesale price list"
+        description="What a reseller pays us per package — editable, saved for every admin"
+        icon={Coins}
+        accent="var(--color-mint)"
+        actions={
+          <>
+            <label className="hidden items-center gap-2 text-xs text-ink-600 sm:flex">
+              Engine cost / credit
+              <Input
+                value={costPerCredit}
+                onChange={(e) => setCostPerCredit(e.target.value)}
+                inputMode="decimal"
+                className="h-9 w-24 font-mono text-sm"
+                aria-label="Engine cost per credit in USD"
+              />
+            </label>
+            <Button size="sm" disabled={savingPrices} onClick={() => void savePrices()}>
+              <Save className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {savingPrices ? "Saving…" : "Save prices"}
+            </Button>
+          </>
+        }
+      >
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-xs">
+          <table className="w-full min-w-[720px] text-left text-xs">
             <thead className="text-2xs uppercase tracking-wider text-ink-500">
               <tr>
                 <th className="px-3 py-2">Package</th>
                 <th className="px-3 py-2">Retail</th>
-                <th className="px-3 py-2">Reseller pays</th>
+                <th className="px-3 py-2">Reseller pays (৳ editable)</th>
                 <th className="px-3 py-2">Our engine cost</th>
                 <th className="px-3 py-2">We keep</th>
                 <th className="px-3 py-2">Cost floor (never below)</th>
@@ -186,7 +295,8 @@ export function ResellersTab() {
             </thead>
             <tbody className="divide-y divide-ink-200/70">
               {PAID_PLANS.map((plan) => {
-                const wholesaleBdt = resellerPriceBdt(plan.id);
+                const typed = Number(priceDraft[plan.id] ?? "");
+                const wholesaleBdt = typed > 0 ? typed : wholesaleBdtFor(plan.id);
                 const wholesaleUsd = bdtToUsd(wholesaleBdt);
                 const floor = priceFloor(plan.id, cost, wholesaleUsd);
                 return (
@@ -196,15 +306,28 @@ export function ResellersTab() {
                       <span className="ml-1.5 text-ink-500">{plan.credits} cr</span>
                     </td>
                     <td className="px-3 py-2 font-mono">{money(Number(plan.price.slice(1)))}</td>
-                    <td className="px-3 py-2 font-mono font-semibold">
-                      {formatBdt(wholesaleBdt)}
-                      <span className="ml-1 text-ink-500">${wholesaleUsd.toFixed(2)}</span>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-ink-500">৳</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="10"
+                          value={priceDraft[plan.id] ?? ""}
+                          onChange={(e) =>
+                            setPriceDraft({ ...priceDraft, [plan.id]: e.target.value })
+                          }
+                          className="h-9 w-28 font-mono text-sm"
+                          aria-label={`Reseller price for ${plan.name} in BDT`}
+                        />
+                        <span className="font-mono text-ink-500">${wholesaleUsd.toFixed(2)}</span>
+                      </div>
                     </td>
                     <td className="px-3 py-2 font-mono">
                       {formatBdt(floor.breakEvenBdt)}
                       <span className="ml-1 text-ink-500">{money(floor.breakEvenUsd)}</span>
                     </td>
-                    <td className="px-3 py-2 font-mono">
+                    <td className="px-3 py-2 font-mono font-semibold">
                       {formatBdt(wholesaleBdt - floor.breakEvenBdt)}
                     </td>
                     <td className="px-3 py-2">
@@ -222,11 +345,16 @@ export function ResellersTab() {
             </tbody>
           </table>
         </div>
-      </section>
+      </Panel>
 
       {/* -------------------------------------------------- create a coupon */}
-      <section className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4">
-        <h3 className="font-display text-sm font-bold text-ink-900">New reseller coupon</h3>
+      <Panel
+        title="New reseller coupon"
+        description="A coupon sets the price a reseller (or their customer) pays at checkout"
+        icon={Ticket}
+        accent="var(--color-orchid)"
+        bodyClassName="space-y-3 p-4"
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block text-xs text-ink-600">
             Code
@@ -274,7 +402,7 @@ export function ResellersTab() {
                 {currency === "BDT"
                   ? `= $${draft.value.toFixed(2)} USD`
                   : `= ${formatBdt(usdToBdt(draft.value))}`}{" "}
-                · suggested {formatBdt(resellerPriceBdt(draftPlan))}
+                · suggested {formatBdt(wholesaleBdtFor(draftPlan))}
               </span>
             )}
           </label>
@@ -404,12 +532,18 @@ export function ResellersTab() {
                 : `Safe — ${draftFloor.multiple}× our ${money(draftFloor.breakEvenUsd)} (${formatBdt(draftFloor.breakEvenBdt)}) engine cost for ${draftFloor.credits} credits.`}
           </p>
         </div>
-      </section>
+      </Panel>
 
       {/* -------------------------------------------------------- coupon list */}
       <section className="space-y-3">
-        <h3 className="font-display text-sm font-bold text-ink-900">Coupons</h3>
-        {rows.length === 0 && <p className="text-sm text-ink-500">No coupons yet.</p>}
+        <h3 className="font-display text-sm font-semibold tracking-tight text-ink-900">Coupons</h3>
+        {rows.length === 0 && (
+          <EmptyState
+            icon={Ticket}
+            title="No reseller coupons yet"
+            description="Create a coupon above to give a reseller their wholesale price."
+          />
+        )}
         <div className="grid gap-3 lg:grid-cols-2">
           {rows.map((coupon) => {
             const status = couponStatus(coupon);
@@ -417,7 +551,7 @@ export function ResellersTab() {
             return (
               <div
                 key={coupon.id}
-                className="space-y-3 rounded-2xl border border-ink-200 bg-white/80 p-4"
+                className="space-y-3 rounded-3xl border border-ink-200/80 bg-white p-4 shadow-ds-xs transition hover:shadow-ds-md"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -533,11 +667,13 @@ export function ResellersTab() {
 
       {/* --------------------------------------------------- redemption log */}
       <section className="space-y-3">
-        <h3 className="font-display text-sm font-bold text-ink-900">Reseller sales</h3>
+        <h3 className="font-display text-sm font-semibold tracking-tight text-ink-900">
+          Reseller sales
+        </h3>
         {redemptions.length === 0 ? (
           <p className="text-sm text-ink-500">No coupon sales recorded yet.</p>
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-ink-200 bg-white/80">
+          <div className="overflow-x-auto rounded-3xl border border-ink-200/80 bg-white shadow-ds-xs">
             <table className="w-full text-left text-xs">
               <thead className="text-2xs uppercase tracking-wider text-ink-500">
                 <tr>

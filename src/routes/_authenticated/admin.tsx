@@ -279,18 +279,26 @@ function AdminPage() {
         )}
 
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-30 border-b border-ink-200/80 bg-white/75 backdrop-blur-xl">
-            <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          <header
+            className="sticky top-0 z-30 overflow-hidden border-b border-white/10 text-[color:var(--color-iris-fg)] shadow-ds-md"
+            style={{ background: "var(--admin-gradient)" }}
+          >
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full opacity-40 blur-3xl"
+              style={{ background: "var(--premium-gradient)" }}
+            />
+            <div className="relative mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
               <button
                 type="button"
                 onClick={() => setNavOpen(true)}
                 aria-label="Open admin menu"
-                className="rounded-xl border border-ink-200 bg-white p-2 text-ink-600 shadow-ds-xs transition hover:border-ink-300 hover:text-ink-900 lg:hidden"
+                className="rounded-xl border border-white/20 bg-white/10 p-2 text-[color:var(--color-iris-fg)] transition hover:bg-white/20 lg:hidden"
               >
                 <Menu className="h-4 w-4" aria-hidden />
               </button>
               <span
-                className="hidden h-10 w-10 shrink-0 place-items-center rounded-2xl text-[color:var(--color-iris-fg)] shadow-ds-xs sm:grid"
+                className="hidden h-10 w-10 shrink-0 place-items-center rounded-2xl text-[color:var(--color-iris-fg)] ring-1 ring-inset ring-white/20 sm:grid"
                 style={{
                   background: `linear-gradient(135deg, ${active.accent}, var(--color-iris-deep))`,
                 }}
@@ -298,18 +306,15 @@ function AdminPage() {
                 <active.icon className="h-4.5 w-4.5" aria-hidden />
               </span>
               <div className="min-w-0">
-                <p className="text-2xs font-semibold uppercase tracking-wider text-ink-500">
+                <p className="text-2xs font-semibold uppercase tracking-wider text-white/55">
                   Admin console · {active.hint}
                 </p>
-                <h1 className="truncate font-display text-lg font-semibold tracking-tight text-ink-900">
+                <h1 className="truncate font-display text-lg font-semibold tracking-tight">
                   {active.label}
                 </h1>
               </div>
-              <CurrencyToggle className="ml-auto shrink-0" />
-              <span
-                className="hidden shrink-0 rounded-full px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] shadow-ds-xs lg:block"
-                style={{ background: "var(--premium-gradient)" }}
-              >
+              <CurrencyToggle className="ml-auto shrink-0" tone="dark" />
+              <span className="hidden shrink-0 rounded-full bg-white/12 px-3 py-1 text-2xs font-semibold text-[color:var(--color-iris-fg)] ring-1 ring-inset ring-white/20 lg:block">
                 Premium controls
               </span>
             </div>

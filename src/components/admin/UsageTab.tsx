@@ -2,11 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Coins, Cpu, DollarSign, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  fetchUsageReport,
-  type UsageReport,
-  type UsageRequestRow,
-} from "@/lib/admin-api";
+import { fetchUsageReport, type UsageReport, type UsageRequestRow } from "@/lib/admin-api";
 import { ACTION_RULES, formatCredits, type CreditAction } from "@/lib/credits";
 import { formatUsd } from "@/lib/credit-ledger";
 
@@ -23,8 +19,7 @@ const EMPTY: UsageReport = {
   totals: { requests: 0, credits: 0, tokens: 0, costUsd: 0 },
 };
 
-const actionLabel = (action: string) =>
-  ACTION_RULES[action as CreditAction]?.label ?? action;
+const actionLabel = (action: string) => ACTION_RULES[action as CreditAction]?.label ?? action;
 
 const shortModel = (value: string | null) => value?.split("/").pop() ?? "—";
 
@@ -62,8 +57,7 @@ export function UsageTab() {
   }, [report.users, search]);
 
   const requests: UsageRequestRow[] = useMemo(
-    () =>
-      selected ? report.requests.filter((r) => r.userId === selected) : report.requests,
+    () => (selected ? report.requests.filter((r) => r.userId === selected) : report.requests),
     [report.requests, selected],
   );
 
@@ -91,16 +85,35 @@ export function UsageTab() {
           ))}
         </div>
         <Button variant="outline" size="sm" onClick={() => void load(days)} disabled={loading}>
-          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden />
+          <RefreshCw
+            className={`mr-1.5 h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            aria-hidden
+          />
           Refresh
         </Button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={<Coins className="h-4 w-4" aria-hidden />} label="Requests" value={String(report.totals.requests)} />
-        <StatCard icon={<Coins className="h-4 w-4" aria-hidden />} label="Credits used" value={formatCredits(report.totals.credits)} />
-        <StatCard icon={<Cpu className="h-4 w-4" aria-hidden />} label="Tokens" value={report.totals.tokens.toLocaleString()} />
-        <StatCard icon={<DollarSign className="h-4 w-4" aria-hidden />} label="Provider cost" value={formatUsd(report.totals.costUsd)} />
+        <StatCard
+          icon={<Coins className="h-4 w-4" aria-hidden />}
+          label="Requests"
+          value={String(report.totals.requests)}
+        />
+        <StatCard
+          icon={<Coins className="h-4 w-4" aria-hidden />}
+          label="Credits used"
+          value={formatCredits(report.totals.credits)}
+        />
+        <StatCard
+          icon={<Cpu className="h-4 w-4" aria-hidden />}
+          label="Tokens"
+          value={report.totals.tokens.toLocaleString()}
+        />
+        <StatCard
+          icon={<DollarSign className="h-4 w-4" aria-hidden />}
+          label="Provider cost"
+          value={formatUsd(report.totals.costUsd)}
+        />
       </div>
 
       {/* Side-by-side: users | per-request breakdown */}
@@ -172,10 +185,12 @@ export function UsageTab() {
               Per-request breakdown
               {selectedUser && (
                 <span className="ml-1.5 font-normal text-ink-500">
-                  — {selectedUser.displayName ?? selectedUser.email ?? `Account ${selectedUser.userId.slice(0, 8)}`}
+                  —{" "}
+                  {selectedUser.displayName ??
+                    selectedUser.email ??
+                    `Account ${selectedUser.userId.slice(0, 8)}`}
                 </span>
               )}
-
             </h2>
             {selected && (
               <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
@@ -187,13 +202,29 @@ export function UsageTab() {
             <table className="w-full min-w-[46rem] text-sm">
               <thead className="sticky top-0 bg-ink-100/80 text-left text-xs uppercase tracking-wide text-ink-500 backdrop-blur">
                 <tr>
-                  <th scope="col" className="px-4 py-2 font-medium">When</th>
-                  {!selected && <th scope="col" className="px-4 py-2 font-medium">User</th>}
-                  <th scope="col" className="px-4 py-2 font-medium">Action</th>
-                  <th scope="col" className="px-4 py-2 font-medium">Model</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Tokens</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">cost_usd</th>
-                  <th scope="col" className="px-4 py-2 text-right font-medium">Credits</th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    When
+                  </th>
+                  {!selected && (
+                    <th scope="col" className="px-4 py-2 font-medium">
+                      User
+                    </th>
+                  )}
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Action
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-medium">
+                    Model
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    Tokens
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    cost_usd
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium">
+                    Credits
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-ink-200">
@@ -213,7 +244,6 @@ export function UsageTab() {
                       <td className="max-w-[12rem] truncate px-4 py-2.5 text-xs text-ink-600">
                         {r.displayName ?? r.email ?? `Account ${r.userId.slice(0, 8)}`}
                       </td>
-
                     )}
                     <td className="px-4 py-2.5 text-ink-900">
                       {actionLabel(r.action)}
@@ -247,7 +277,9 @@ export function UsageTab() {
                         r.credits < 0 ? "text-emerald-600" : "text-ink-900"
                       }`}
                     >
-                      {r.credits < 0 ? `+${formatCredits(Math.abs(r.credits))}` : formatCredits(r.credits)}
+                      {r.credits < 0
+                        ? `+${formatCredits(Math.abs(r.credits))}`
+                        : formatCredits(r.credits)}
                     </td>
                   </tr>
                 ))}
@@ -267,7 +299,9 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
         {icon}
         {label}
       </div>
-      <p className="mt-1.5 font-display text-xl font-semibold tracking-tight text-ink-900">{value}</p>
+      <p className="mt-1.5 font-display text-xl font-semibold tracking-tight text-ink-900">
+        {value}
+      </p>
     </div>
   );
 }
