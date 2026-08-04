@@ -69,11 +69,16 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import {
   actionForMode,
-  estimateCost,
+  
+  estimateCostForWords,
   formatCredits,
+  promptCoach,
+  wordBudget,
+  MAX_PROMPT_WORDS,
   ACTION_RULES,
   type CreditAction,
 } from "@/lib/credits";
+
 import { useCredits } from "@/hooks/useCredits";
 import { useAdmin } from "@/hooks/useAdmin";
 import { CreditMeter } from "@/components/CreditMeter";
@@ -742,15 +747,27 @@ function ChatWorkspaceInner() {
     [modelId, updateThread, mode, credits, isMobile, openWorkspace, openProject, setFixIntent],
   );
 
+  // Pricing is word-based, so the composer measures words, quotes the cost from
+  // that number and refuses anything over the hard cap before it can be charged.
+  const budget = wordBudget(input);
+  const coachTips = promptCoach(input);
+
   const handleSend = async () => {
     const text = input.trim();
     if (!text || isSending || !active) return;
+    if (budget.overLimit) {
+      setAttachmentError(
+        `Prompt is ${budget.words} words — trim ${budget.overBy} to stay under the ${MAX_PROMPT_WORDS}-word limit.`,
+      );
+      return;
+    }
     const pendingAttachments = attachments;
     setInput("");
     setAttachments([]);
     setAttachmentError(null);
     await sendText(text, active, mode, pendingAttachments);
   };
+
 
   const cancelGeneration = useCallback(() => requestAbortRef.current?.abort(), []);
 
@@ -1433,10 +1450,25 @@ function ChatWorkspaceInner() {
                     <span className="hidden min-w-0 truncate text-2xs text-ink-400 sm:inline">
                       {ACTION_RULES[actionForMode(mode)].label} ·{" "}
                       <span className="font-medium text-ink-600">
-                        {formatCredits(estimateCost(actionForMode(mode), input.length))}
+                        {formatCredits(estimateCostForWords(actionForMode(mode), budget.words))}
                       </span>{" "}
                       credits {credits.unlimited && "· unlimited"}
                     </span>
+
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-2xs font-medium tabular-nums",
+                        budget.overLimit
+                          ? "bg-destructive/10 text-destructive"
+                          : budget.pct > 80
+                            ? "bg-amber-500/10 text-amber-600"
+                            : "text-ink-400",
+                      )}
+                      aria-live="polite"
+                    >
+                      {budget.words}/{MAX_PROMPT_WORDS} words
+                    </span>
+
 
                     <div className="ml-auto flex shrink-0 items-center gap-1">
                       {/* Mode as a compact dropdown, not a tab strip */}
@@ -1503,12 +1535,23 @@ function ChatWorkspaceInner() {
 
                       <SendButton
                         onClick={isSending ? cancelGeneration : () => void handleSend()}
-                        disabled={!isSending && !input.trim()}
+                        disabled={!isSending && (!input.trim() || budget.overLimit)}
                         loading={isSending}
                       />
                     </div>
                   </div>
                 </div>
+
+                {coachTips.length > 0 && (
+                  <ul className="mt-2 space-y-1 text-2xs leading-snug text-ink-500">
+                    {coachTips.map((tip) => (
+                      <li key={tip} className={cn(budget.overLimit && "text-destructive")}>
+                        {tip}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
 
                 {(attachmentError || voice.error) && (
                   <div

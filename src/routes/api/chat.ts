@@ -2,7 +2,13 @@ import { apiErrorResponse, codeFromUpstream } from "@/lib/api-error";
 import { createFileRoute } from "@tanstack/react-router";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
 import { isPlanId } from "@/lib/plans";
-import { actionForMode, actualUsageCost } from "@/lib/credits";
+import {
+  MAX_PROMPT_WORDS,
+  actionForMode,
+  actualUsageCost,
+  countWords,
+} from "@/lib/credits";
+
 import { systemPromptFor } from "@/lib/prompts";
 import { newTraceId, recordTrace, type TraceAttempt } from "@/lib/request-trace.server";
 import {
@@ -94,6 +100,20 @@ export const Route = createFileRoute("/api/chat")({
         const threadId = typeof body.threadId === "string" ? body.threadId : null;
         const attempts: TraceAttempt[] = [];
         const requestStarted = Date.now();
+
+        // ---- word budget (pricing is word-based, so the cap is authoritative) ----
+        const promptWords = countWords(lastUser?.content ?? "");
+        if (promptWords > MAX_PROMPT_WORDS) {
+          return apiErrorResponse(
+            "bad_request",
+            "chat",
+            `This prompt is ${promptWords} words. Keep a single message under ${MAX_PROMPT_WORDS} words — split larger specs into follow-up messages.`,
+            { words: promptWords, limit: MAX_PROMPT_WORDS },
+          );
+        }
+
+
+
 
         // ---- server-side credit enforcement (before any provider call) ----
         let charge;
