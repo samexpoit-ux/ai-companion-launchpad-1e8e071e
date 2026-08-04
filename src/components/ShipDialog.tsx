@@ -82,7 +82,32 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
     }
   };
 
-  const doPush = async () => {
+  const doConnect = async () => {
+    if (!payload) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const conn = await connect({
+        data: {
+          token: token.trim(),
+          repo: repo.trim() || slugify(payload.title),
+          owner: owner.trim() || undefined,
+          private: true,
+          autoPush: false,
+        },
+      });
+      setConnection(conn);
+      setToken("");
+      await doPush(conn);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not connect the repository.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doPush = async (conn?: GitHubConnection) => {
     if (!payload) return;
     setBusy(true);
     setError(null);
@@ -90,22 +115,46 @@ export function ShipDialog({ payload, trigger }: { payload: ShipPayload | null; 
     try {
       const res = await push({
         data: {
-          token: token.trim(),
-          repo: repo.trim() || slugify(payload.title),
-          owner: owner.trim() || undefined,
-          private: true,
           message: `Nexura AI — ${payload.title ?? "project"} update`,
           files: buildShipFiles(payload),
         },
       });
       setResult(res);
-      setToken("");
+      setConnection({
+        ...(conn ?? connection ?? { connected: true }),
+        connected: true,
+        lastCommit: res.commit,
+        lastPushedAt: new Date().toISOString(),
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "GitHub push failed.");
     } finally {
       setBusy(false);
     }
   };
+
+  const doDisconnect = async () => {
+    setBusy(true);
+    try {
+      await disconnect({});
+      setConnection({ connected: false });
+      setResult(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not disconnect.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doToggleAuto = async (next: boolean) => {
+    setConnection((c) => (c ? { ...c, autoPush: next } : c));
+    try {
+      await toggleAuto({ data: { autoPush: next } });
+    } catch {
+      setConnection((c) => (c ? { ...c, autoPush: !next } : c));
+    }
+  };
+
 
   return (
     <Dialog>
