@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseArtifacts, stripArtifacts } from "./artifact";
+import { parseArtifacts, stripArtifacts } from "@/lib/artifact";
 
 describe("parseArtifacts", () => {
   it("parses a well-formed artifact", () => {
