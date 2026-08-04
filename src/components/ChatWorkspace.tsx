@@ -91,6 +91,7 @@ import {
   renameThread as renameDbThread,
   saveMessage,
   subscribeToChat,
+  type StoredMessage,
 } from "@/lib/chat-store";
 
 import { BrandMark, BrandWordmark, BrandGlyph } from "@/components/BrandMark";
@@ -127,6 +128,30 @@ const createFreshThread = (): ChatThread => ({
   messages: [],
   updatedAt: Date.now(),
 });
+
+/**
+ * Rows are keyed by their client id so optimistic bubbles reconcile with the
+ * persisted copy. Two rows can carry the same client id (a retried save, a
+ * realtime echo persisted twice), so dedupe here — otherwise React renders
+ * duplicate keys and drops a bubble.
+ */
+function toChatMessages(rows: StoredMessage[]) {
+  const byId = new Map<string, ChatThread["messages"][number]>();
+  for (const row of rows) {
+    const id = row.clientId ?? row.id;
+    byId.set(id, {
+      id,
+      role: row.role === "assistant" ? ("assistant" as const) : ("user" as const),
+      content: row.content,
+      createdAt: new Date(row.createdAt).getTime(),
+      model: row.model ?? undefined,
+      tokens: row.tokens ?? undefined,
+      latencyMs: row.latencyMs ?? undefined,
+    });
+  }
+  return [...byId.values()].sort((a, b) => a.createdAt - b.createdAt);
+}
+
 
 type ComposerMode = "Build" | "Chat" | "Plan" | "Image";
 const COMPOSER_MODES: readonly ComposerMode[] = ["Build", "Chat", "Plan", "Image"];
@@ -306,15 +331,8 @@ function ChatWorkspaceInner() {
           t.id === openId
             ? {
                 ...t,
-                messages: messages.map((m) => ({
-                  id: m.clientId ?? m.id,
-                  role: m.role === "assistant" ? "assistant" : "user",
-                  content: m.content,
-                  createdAt: new Date(m.createdAt).getTime(),
-                  model: m.model ?? undefined,
-                  tokens: m.tokens ?? undefined,
-                  latencyMs: m.latencyMs ?? undefined,
-                })),
+                messages: toChatMessages(messages),
+
               }
             : t,
         ),
@@ -343,15 +361,8 @@ function ChatWorkspaceInner() {
           thread.id === requestedThreadId
             ? {
                 ...thread,
-                messages: rows.map((message) => ({
-                  id: message.clientId ?? message.id,
-                  role: message.role === "assistant" ? ("assistant" as const) : ("user" as const),
-                  content: message.content,
-                  createdAt: new Date(message.createdAt).getTime(),
-                  model: message.model ?? undefined,
-                  tokens: message.tokens ?? undefined,
-                  latencyMs: message.latencyMs ?? undefined,
-                })),
+                messages: toChatMessages(rows),
+
               }
             : thread,
         ),
@@ -569,15 +580,8 @@ function ChatWorkspaceInner() {
             t.id === id
               ? {
                   ...t,
-                  messages: rows.map((m) => ({
-                    id: m.clientId ?? m.id,
-                    role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-                    content: m.content,
-                    createdAt: new Date(m.createdAt).getTime(),
-                    model: m.model ?? undefined,
-                    tokens: m.tokens ?? undefined,
-                    latencyMs: m.latencyMs ?? undefined,
-                  })),
+                  messages: toChatMessages(rows),
+
                 }
               : t,
           ),
