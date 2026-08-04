@@ -688,7 +688,11 @@ function ChatWorkspaceInner() {
         });
         // Lovable behaviour: a generated project loads straight into the
         // right-hand live workspace, no extra click.
-        const generated = parseArtifacts(reply.content)[0];
+        // A long build can arrive as several artifact blocks (base files,
+        // followed by route/page additions). Applying only the first block
+        // silently dropped later pages and made an admin-only block look like
+        // it had replaced the website. Collapse the whole delivery first.
+        const generated = mergeArtifactProjects(parseArtifacts(reply.content));
         if (generated) {
           applyProjectUpdate(generated);
           // Give the repair loop the conversation's intent so a fix keeps the
@@ -746,7 +750,16 @@ function ChatWorkspaceInner() {
         setIsSending(false);
       }
     },
-    [modelId, updateThread, mode, credits, isMobile, openWorkspace, openProject, setFixIntent],
+    [
+      modelId,
+      updateThread,
+      mode,
+      credits,
+      isMobile,
+      openWorkspace,
+      applyProjectUpdate,
+      setFixIntent,
+    ],
   );
 
   // Pricing is word-based, so the composer measures words, quotes the cost from

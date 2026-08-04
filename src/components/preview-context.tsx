@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ArtifactProject } from "@/lib/artifact";
+import { previewRouter } from "@/lib/preview-shims";
 
 export type PreviewLang = "react" | "react-ts" | "html" | "vanilla" | "vanilla-ts" | "css" | "mdx";
 export type PreviewTab = "preview" | "code" | "console" | "stack";
@@ -480,6 +481,10 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
   const openProject = useCallback(
     (project: ArtifactProject) => {
+      // Routes belong to the project being opened, not the previous thread.
+      // Always reveal the new project's home first; navigating within an
+      // iterative update is intentionally preserved by applyProjectUpdate.
+      previewRouter.reset();
       const entry = project.entry;
       const code = project.files[entry] ?? "";
       const next: PreviewPayload = {
@@ -626,6 +631,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   }, [openProject]);
 
   const clearProject = useCallback(() => {
+    previewRouter.reset();
     setPayload(null);
     setTimeline(null);
     setActiveFile(null);
