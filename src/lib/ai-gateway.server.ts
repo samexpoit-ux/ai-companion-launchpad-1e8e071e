@@ -210,6 +210,51 @@ function maxTokensFor(model: string, task: TaskKind): number {
   return 1600;
 }
 
+/** Per-attempt wall clock. A hung provider must never hold the whole request. */
+export function attemptTimeoutMs(task: TaskKind): number {
+  if (task === "code" || task === "fix") return 150_000;
+  if (task === "image") return 90_000;
+  if (task === "reason") return 90_000;
+  return 60_000;
+}
+
+/** Whole-request budget: after this we stop walking the chain and report. */
+export function totalBudgetMs(task: TaskKind): number {
+  return task === "code" || task === "fix" ? 330_000 : 150_000;
+}
+
+/**
+ * Errors that mean "this model can never run on this account" (bad id, no
+ * endpoint for our data policy, model gone). Retrying wastes minutes, so the
+ * chain skips these instantly instead of timing them out.
+ */
+export function isPermanentModelError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return (
+    /No endpoints found/i.test(msg) ||
+    /data policy/i.test(msg) ||
+    /is not a valid model/i.test(msg) ||
+    /No allowed providers/i.test(msg)
+  );
+}
+
+function combineSignals(timeoutMs: number, external?: AbortSignal): { signal: AbortSignal; done: () => void } {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(new Error("attempt timed out")), timeoutMs);
+  const onAbort = () => ctl.abort(external?.reason);
+  if (external) {
+    if (external.aborted) onAbort();
+    else external.addEventListener("abort", onAbort, { once: true });
+  }
+  return {
+    signal: ctl.signal,
+    done: () => {
+      clearTimeout(timer);
+      external?.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
 export async function callChatCompletion(
   config: OpenRouterConfig,
   upstreamModel: string,
@@ -217,28 +262,41 @@ export async function callChatCompletion(
   task: TaskKind = "chat",
   signal?: AbortSignal,
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number }> {
-  const res = await fetch(`${config.baseURL}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
-      ...config.extraHeaders,
-    },
-    body: JSON.stringify({
-      model: upstreamModel,
-      messages,
-      temperature: task === "code" || task === "fix" ? 0.2 : 0.7,
-      ...(task === "image" ? { modalities: ["image", "text"] } : {}),
-      max_tokens: maxTokensFor(upstreamModel, task),
-      stream: false,
-      // Real token + dollar cost of the call comes back in `usage`.
-      usage: { include: true },
-      // OpenRouter provider routing: cheapest healthy provider, but never
-      // silently drop to a provider that can't serve the full context.
-      provider: { sort: "price", allow_fallbacks: true, data_collection: "deny" },
-    }),
-    signal,
-  });
+  const isFree = upstreamModel.endsWith(":free");
+  const guard = combineSignals(attemptTimeoutMs(task), signal);
+  let res: Response;
+  try {
+    res = await fetch(`${config.baseURL}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.apiKey}`,
+        ...config.extraHeaders,
+      },
+      body: JSON.stringify({
+        model: upstreamModel,
+        messages,
+        temperature: task === "code" || task === "fix" ? 0.2 : 0.7,
+        ...(task === "image" ? { modalities: ["image", "text"] } : {}),
+        max_tokens: maxTokensFor(upstreamModel, task),
+        stream: false,
+        // Real token + dollar cost of the call comes back in `usage`.
+        usage: { include: true },
+        // OpenRouter provider routing: cheapest healthy provider, but never
+        // silently drop to a provider that can't serve the full context.
+        // Free endpoints only exist for accounts that allow prompt training, so
+        // asking them to deny data collection leaves zero endpoints (404).
+        provider: {
+          sort: "price",
+          allow_fallbacks: true,
+          ...(isFree ? {} : { data_collection: "deny" }),
+        },
+      }),
+      signal: guard.signal,
+    });
+  } finally {
+    guard.done();
+  }
 
   if (!res.ok) {
     const text = await res.text().catch(() => "");
@@ -282,7 +340,12 @@ export async function callChatCompletion(
   };
 }
 
-/** Run the primary model, then walk the fallback chain on failure. */
+/**
+ * Run the primary model, then walk the fallback chain on failure.
+ * Guardrails: every attempt has its own timeout, permanently broken models are
+ * skipped instantly, and the whole walk stops at a total budget so the user
+ * gets a real answer (or a real error) instead of an endless spinner.
+ */
 export async function runWithFallback(
   route: ResolvedRoute,
   messages: Array<{ role: "system" | "user" | "assistant"; content: GatewayMessageContent }>,
@@ -290,11 +353,20 @@ export async function runWithFallback(
   signal?: AbortSignal,
 ): Promise<{ content: string; tokens: number; inputTokens: number; outputTokens: number; costUsd: number; upstream: string }> {
   const chain = [route.upstream, ...route.fallbacks];
+  const deadline = Date.now() + totalBudgetMs(route.task);
   let lastError: unknown;
+  let ran = 0;
   for (const model of chain) {
+    // A permanent failure costs no time, so only real attempts consume budget.
+    if (ran > 0 && Date.now() >= deadline) {
+      lastError =
+        lastError ?? new Error("The build took too long and was stopped before finishing.");
+      break;
+    }
     const started = Date.now();
     try {
       const out = await callChatCompletion(route.config, model, messages, route.task, signal);
+      ran += 1;
       if (out.content.trim()) {
         // Build mode is a delivery contract, not a normal chat answer. If a
         // provider only explains the page, continue to the next coding model.
@@ -326,11 +398,15 @@ export async function runWithFallback(
     } catch (err) {
       if (signal?.aborted) throw err;
       lastError = err;
+      const permanent = isPermanentModelError(err);
+      if (!permanent) ran += 1;
       onAttempt?.({
         model,
         ok: false,
         ms: Date.now() - started,
-        error: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300),
+        error: `${permanent ? "unavailable: " : ""}${
+          err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300)
+        }`,
       });
     }
   }
