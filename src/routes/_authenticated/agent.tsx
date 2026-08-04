@@ -20,6 +20,7 @@ import { PageBar, PageBody, PageHeader, PageSection, PageShell } from "@/compone
 import { supabase } from "@/integrations/supabase/client";
 import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { AgentScreenshotGallery } from "@/components/AgentScreenshotGallery";
+import { AgentTranscript } from "@/components/AgentTranscript";
 import {
   AGENT_APPROVAL_PHRASE,
   AGENT_ATTEMPTS,
@@ -691,36 +692,15 @@ function SessionCard({
             </pre>
           ) : null}
 
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-500">Audit log</h4>
-          <ol className="mt-2 space-y-1.5">
-            {audit.length === 0 ? (
-              <li className="text-sm text-ink-500">No steps recorded yet.</li>
-            ) : (
-              audit.map((row) => (
-                <li key={row.id} className="flex items-start gap-2 text-sm">
-                  <span
-                    className={cn(
-                      "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-                      row.ok ? "bg-emerald-500" : "bg-rose-500",
-                    )}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className={row.ok ? "text-ink-800" : "text-rose-700"}>{row.label}</span>
-                    <span className="ml-2 text-xs text-ink-400">
-                      {row.kind}
-                      {row.attempt ? ` · try ${row.attempt}` : ""}
-                      {row.duration_ms != null ? ` · ${formatDuration(row.duration_ms)}` : ""}
-                    </span>
-                  </span>
-                  <time className="shrink-0 text-xs text-ink-400">
-                    {new Date(row.created_at).toLocaleTimeString()}
-                  </time>
-                </li>
-              ))
-            )}
-          </ol>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-ink-500">
+            Run transcript
+          </h4>
+          <div className="mt-2">
+            <AgentTranscript rows={audit} shots={shots} />
+          </div>
 
           <AgentScreenshotGallery shots={shots} />
+
 
         </div>
       ) : null}

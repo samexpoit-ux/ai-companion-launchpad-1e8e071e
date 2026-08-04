@@ -13,7 +13,7 @@ import type { ArtifactProject } from "@/lib/artifact";
 import { previewRouter } from "@/lib/preview-shims";
 
 export type PreviewLang = "react" | "react-ts" | "html" | "vanilla" | "vanilla-ts" | "css" | "mdx";
-export type PreviewTab = "preview" | "code" | "console" | "stack";
+export type PreviewTab = "preview" | "code" | "console" | "stack" | "diagnostics";
 
 /** One line in the right-hand Details timeline. */
 export interface TimelineStep {

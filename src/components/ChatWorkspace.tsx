@@ -118,6 +118,13 @@ import { PreviewPanel } from "@/components/PreviewPanel";
 import { PlayCircle, GripVertical, FolderTree, PanelRight } from "lucide-react";
 import { chatProse, mergeArtifactProjects, parseArtifacts, type ArtifactProject } from "@/lib/artifact";
 import { ActivityCard, stepsForMessage } from "@/components/ActivityCard";
+import {
+  finishRun,
+  mergeTimelineSteps,
+  recordStep,
+  recordedSteps,
+  startRun,
+} from "@/lib/run-timeline";
 
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from "react-resizable-panels";
 
@@ -636,6 +643,25 @@ function ChatWorkspaceInner() {
         updatedAt: Date.now(),
       }));
       setIsSending(true);
+      // Prompt activity timeline — every step of this run is recorded live so
+      // the turn card and the Details panel show the same full trajectory.
+      const runId = uid();
+      startRun({ runId, threadId: thread.id, title: value.slice(0, 60) });
+      recordStep(runId, {
+        kind: "prompt",
+        label: "Received your prompt",
+        detail: `${value.trim().split(/\s+/).length} words${
+          requestAttachments.length ? ` · ${requestAttachments.length} attachment(s)` : ""
+        }`,
+      });
+      recordStep(runId, {
+        kind: "plan",
+        label: `Planned a ${requestedMode} run`,
+        detail: `${ACTION_RULES[action].label} · quote ${formatCredits(
+          credits.quote(action, value.length),
+        )} credits`,
+      });
+      const startedAt = Date.now();
       const controller = new AbortController();
       requestAbortRef.current = controller;
       // Right-hand workspace opens itself as soon as work starts (desktop).
@@ -655,6 +681,34 @@ function ChatWorkspaceInner() {
           threadId: thread.id,
           attachments: requestAttachments,
           signal: controller.signal,
+        });
+        recordStep(runId, {
+          kind: "route",
+          label: "Routed to the best-value engine",
+          detail: `${(reply.attempts ?? []).length || 1} attempt(s)`,
+          ms: reply.latencyMs ?? Date.now() - startedAt,
+        });
+        for (const attempt of reply.attempts ?? []) {
+          recordStep(runId, {
+            kind: "route",
+            label: attempt.ok ? "Delivery check passed" : "Fell back after a failed check",
+            detail: attempt.ok ? undefined : (attempt.error ?? "delivery incomplete").slice(0, 120),
+            ok: attempt.ok,
+            ms: attempt.ms,
+          });
+        }
+        recordStep(runId, {
+          kind: "delivery",
+          label: "Generated the response",
+          detail: [
+            reply.tokens ? `${reply.tokens} tokens` : null,
+            reply.inputTokens != null ? `${reply.inputTokens} in` : null,
+            reply.outputTokens != null ? `${reply.outputTokens} out` : null,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          ok: true,
+          ms: reply.latencyMs,
         });
         const asstMsg: ChatMessage = {
           id: uid(),
@@ -692,9 +746,28 @@ function ChatWorkspaceInner() {
         // followed by route/page additions). Applying only the first block
         // silently dropped later pages and made an admin-only block look like
         // it had replaced the website. Collapse the whole delivery first.
-        const generated = mergeArtifactProjects(parseArtifacts(reply.content));
+        const blocks = parseArtifacts(reply.content);
+        const generated = mergeArtifactProjects(blocks);
         if (generated) {
+          recordStep(runId, {
+            kind: "artifact",
+            label:
+              blocks.length > 1
+                ? `Merged ${blocks.length} artifact blocks`
+                : "Parsed the delivered artifact",
+            detail: `${generated.order.length} files`,
+            ok: true,
+          });
+          for (const path of generated.order.slice(0, 12)) {
+            recordStep(runId, { kind: "file", label: "Wrote file", detail: path, ok: true });
+          }
           applyProjectUpdate(generated);
+          recordStep(runId, {
+            kind: "preview",
+            label: "Loaded the live preview",
+            detail: generated.entry ?? undefined,
+            ok: true,
+          });
           // Give the repair loop the conversation's intent so a fix keeps the
           // feature the user asked for instead of just silencing the error.
           setFixIntent(
@@ -706,8 +779,19 @@ function ChatWorkspaceInner() {
         }
         if (reply.credits) credits.applyServerBalance(reply.credits);
         else void credits.refresh();
+        if (reply.credits) {
+          recordStep(runId, {
+            kind: "credits",
+            label: "Charged credits",
+            detail: `${formatCredits(reply.credits.charged)} credits`,
+            ok: true,
+          });
+        }
+        finishRun(runId, { messageId: asstMsg.id });
       } catch (error) {
         if (controller.signal.aborted) {
+          recordStep(runId, { kind: "error", label: "Stopped by you", ok: false });
+          finishRun(runId);
           const stopped: ChatMessage = {
             id: uid(),
             role: "assistant",
@@ -740,11 +824,18 @@ function ChatWorkspaceInner() {
           model: modelId,
           createdAt: Date.now(),
         };
+        recordStep(runId, {
+          kind: "error",
+          label: "Run failed",
+          detail: `${apiErr.code} — ${apiErr.message}`.slice(0, 160),
+          ok: false,
+        });
         updateThread(thread.id, (t) => ({
           ...t,
           messages: [...t.messages, asstMsg],
           updatedAt: Date.now(),
         }));
+        finishRun(runId, { messageId: asstMsg.id });
       } finally {
         if (requestAbortRef.current === controller) requestAbortRef.current = null;
         setIsSending(false);
@@ -1984,19 +2075,22 @@ function MessageBubble({
                     .filter((v, i, arr) => arr.indexOf(v) === i)
                 : undefined,
             }}
-            steps={stepsForMessage({
-              adminView,
-              modelName,
-              latencyMs: message.latencyMs,
-              tokens: message.tokens,
-              inputTokens: message.inputTokens,
-              outputTokens: message.outputTokens,
-              credits: message.credits,
-              fileCount: project?.order.length,
-              traceId: message.traceId,
-              task: message.task,
-              attempts: message.attempts,
-            })}
+            steps={mergeTimelineSteps(
+              recordedSteps(message.id),
+              stepsForMessage({
+                adminView,
+                modelName,
+                latencyMs: message.latencyMs,
+                tokens: message.tokens,
+                inputTokens: message.inputTokens,
+                outputTokens: message.outputTokens,
+                credits: message.credits,
+                fileCount: project?.order.length,
+                traceId: message.traceId,
+                task: message.task,
+                attempts: message.attempts,
+              }),
+            )}
           />
         )}
         <div
