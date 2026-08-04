@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { framerMotion } from "./preview-shims";
+import { framerMotion, previewRouter } from "./preview-shims";
+
+describe("preview router state", () => {
+  it("returns to home when a project or version is reset", () => {
+    previewRouter.navigate("/admin");
+    expect(previewRouter.getPath()).toBe("/admin");
+    previewRouter.reset();
+    expect(previewRouter.getPath()).toBe("/");
+  });
+});
 
 describe("framer-motion preview shim", () => {
   it("exposes the hooks generated projects actually import", () => {

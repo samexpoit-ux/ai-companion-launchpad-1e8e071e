@@ -468,6 +468,7 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
 
   const openPreview = useCallback(
     (code: string, rawLang: string) => {
+      previewRouter.reset();
       const next: PreviewPayload = { code, lang: smartDetect(code, rawLang) };
       setPayload(next);
       setIsOpen(true);
@@ -729,6 +730,9 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   const rollbackTo = useCallback((id: string) => {
     const target = versionsRef.current.find((v) => v.id === id);
     if (!target) return;
+    // A restored version is a fresh document view. Do not carry a route that
+    // may only exist in the newer version into the restored sandbox.
+    previewRouter.reset();
     setPayload(target.payload);
     setActiveFile(target.payload.entry ?? null);
     setRevision((r) => r + 1);

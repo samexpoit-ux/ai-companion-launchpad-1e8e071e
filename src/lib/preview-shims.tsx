@@ -135,7 +135,13 @@ function Routes({ children }: { children?: React.ReactNode }) {
       );
     }
   }
-  return <>{fallback?.props.element ?? fallback?.props.children ?? null}</>;
+  if (fallback) return <>{fallback.props.element ?? fallback.props.children ?? null}</>;
+
+  // Unknown/stale paths should degrade to the generated app's home route,
+  // never a silent blank frame. This commonly happens after a route is
+  // removed by a rollback or a project switch.
+  const home = routes.find((route) => route.props.index || route.props.path === "/");
+  return <>{home?.props.element ?? home?.props.children ?? null}</>;
 }
 
 type AnchorProps = React.AnchorHTMLAttributes<HTMLAnchorElement> & {
@@ -274,9 +280,12 @@ function RouterProvider({ router }: { router?: PreviewDataRouter }) {
     previewRouter.getPath,
   );
   const navigate = router?.navigate ?? previewRouter.navigate;
+  const routes = router?.routes ?? [];
+  const rendered = renderDataRoutes(routes, path, navigate);
+  const home = rendered ?? renderDataRoutes(routes, "/", navigate);
   return (
     <RouterContext.Provider value={{ path, navigate, params: {} }}>
-      {renderDataRoutes(router?.routes ?? [], path, navigate)}
+      {home}
     </RouterContext.Provider>
   );
 }
