@@ -30,6 +30,8 @@ const pushInput = z.object({
 
 export interface GitHubConnection {
   connected: boolean;
+  /** True once a repository has been created/linked for the connected account. */
+  repoLinked?: boolean;
   login?: string;
   owner?: string;
   repo?: string;
@@ -51,16 +53,140 @@ export const getGitHubConnection = createServerFn({ method: "GET" })
       .maybeSingle();
     if (!data) return { connected: false };
     const row = data as Record<string, unknown>;
+    const repo = String(row["repo"] ?? "");
     return {
       connected: true,
+      repoLinked: repo.length > 0,
       login: String(row["login"] ?? ""),
       owner: String(row["owner"] ?? ""),
       repo: String(row["repo"] ?? ""),
       branch: String(row["branch"] ?? "main"),
       autoPush: Boolean(row["auto_push"]),
-      repoUrl: `https://github.com/${String(row["owner"])}/${String(row["repo"])}`,
+      repoUrl: repo ? `https://github.com/${String(row["owner"])}/${repo}` : undefined,
       lastCommit: (row["last_commit"] as string | null) ?? null,
       lastPushedAt: (row["last_pushed_at"] as string | null) ?? null,
+    };
+  });
+
+
+/** Is the platform OAuth App configured on this server? */
+export const getGitHubOAuthStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const { githubOAuthConfigured, GITHUB_CALLBACK_PATH } = await import(
+    "@/lib/github-oauth.server"
+  );
+  return { configured: githubOAuthConfigured(), callbackPath: GITHUB_CALLBACK_PATH };
+});
+
+/**
+ * Begin the OAuth handshake: returns the GitHub authorize URL to open in a
+ * popup. The `state` is signed server-side and carries the signed-in user id,
+ * so the public callback can store the token for the right account.
+ */
+export const startGitHubOAuth = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ origin: z.string().url().optional() }).parse(data ?? {}),
+  )
+  .handler(async ({ data, context }) => {
+    const { githubOAuthConfigured, signState, authorizeUrl, callbackUrl } = await import(
+      "@/lib/github-oauth.server"
+    );
+    if (!githubOAuthConfigured()) {
+      throw new Error(
+        "GitHub is not configured on this server yet. Add GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET.",
+      );
+    }
+    const origin = data.origin ?? "";
+    const redirect = callbackUrl(origin);
+    const state = signState(context.userId, origin);
+    return { url: authorizeUrl(state, redirect), redirectUri: redirect };
+  });
+
+/**
+ * Create (or attach to) the repository for the already-authorized account and
+ * save it as the project's sync target.
+ */
+export const linkGitHubRepo = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        repo: repoName,
+        owner: z.string().trim().optional(),
+        private: z.boolean().default(true),
+        autoPush: z.boolean().default(true),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }): Promise<GitHubConnection> => {
+    const { gh, ensureRepo } = await import("@/lib/github.server");
+    const { openSecret } = await import("@/lib/agent-vault.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const admin = supabaseAdmin as unknown as {
+      from: (table: string) => {
+        select: (columns: string) => {
+          eq: (
+            column: string,
+            value: string,
+          ) => { maybeSingle: () => Promise<{ data: Record<string, unknown> | null }> };
+        };
+        upsert: (
+          value: unknown,
+          options?: unknown,
+        ) => Promise<{ error: { message: string } | null }>;
+      };
+    };
+
+    const { data: sealed } = await admin
+      .from("github_connection_secrets")
+      .select("ciphertext, iv")
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!sealed) throw new Error("Authorize GitHub first, then pick a repository.");
+
+    const token = await openSecret({
+      ciphertext: String(sealed["ciphertext"]),
+      iv: String(sealed["iv"]),
+    });
+
+    const me = await gh(token, "/user");
+    if (!me.ok) {
+      throw new Error("Your GitHub authorization expired — connect GitHub again.");
+    }
+    const login = String(me.json["login"] ?? "");
+    const owner = data.owner?.trim() || login;
+
+    const { branch } = await ensureRepo(token, owner, data.repo, {
+      isOrg: Boolean(data.owner?.trim() && data.owner.trim() !== login),
+      private: data.private,
+    });
+
+    const meta = await admin.from("github_connections").upsert(
+      {
+        user_id: context.userId,
+        login,
+        owner,
+        repo: data.repo,
+        branch,
+        auto_push: data.autoPush,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    if (meta.error) throw new Error(`Could not save the repository: ${meta.error.message}`);
+
+    return {
+      connected: true,
+      repoLinked: true,
+      login,
+      owner,
+      repo: data.repo,
+      branch,
+      autoPush: data.autoPush,
+      repoUrl: `https://github.com/${owner}/${data.repo}`,
+      lastCommit: null,
+      lastPushedAt: null,
     };
   });
 

@@ -24,6 +24,9 @@ import {
   connectGitHub,
   disconnectGitHub,
   getGitHubConnection,
+  getGitHubOAuthStatus,
+  linkGitHubRepo,
+  startGitHubOAuth,
   pushToConnectedRepo,
   setGitHubAutoPush,
   type GitHubConnection,
@@ -45,6 +48,9 @@ export function ShipDialog({
   const disconnect = useServerFn(disconnectGitHub);
   const readConnection = useServerFn(getGitHubConnection);
   const toggleAuto = useServerFn(setGitHubAutoPush);
+  const readOAuthStatus = useServerFn(getGitHubOAuthStatus);
+  const startOAuth = useServerFn(startGitHubOAuth);
+  const linkRepo = useServerFn(linkGitHubRepo);
 
   const [zipping, setZipping] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,6 +65,21 @@ export function ShipDialog({
     files: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [oauth, setOauth] = useState<{ configured: boolean } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    void readOAuthStatus({})
+      .then((s) => {
+        if (mounted) setOauth({ configured: s.configured });
+      })
+      .catch(() => {
+        if (mounted) setOauth({ configured: false });
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [readOAuthStatus]);
 
   useEffect(() => {
     let mounted = true;
@@ -115,6 +136,83 @@ export function ShipDialog({
       await doPush(conn);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not connect the repository.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * Lovable-style connect: open GitHub's authorize screen in a popup, wait for
+   * the callback to report success, then create/attach the repository and push.
+   */
+  const doOAuthConnect = async () => {
+    if (!payload) return;
+    setBusy(true);
+    setError(null);
+    setResult(null);
+
+    const popup = window.open("", "nexura-github", "width=980,height=760");
+    try {
+      const { url } = await startOAuth({ data: { origin: window.location.origin } });
+      if (popup) popup.location.href = url;
+      else window.location.href = url;
+
+      const authorized = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+        const timer = window.setInterval(() => {
+          if (popup?.closed) {
+            window.clearInterval(timer);
+            window.removeEventListener("message", onMessage);
+            resolve({ ok: false, error: "The GitHub window was closed before finishing." });
+          }
+        }, 600);
+        function onMessage(event: MessageEvent) {
+          const data = event.data as { type?: string; ok?: boolean; error?: string } | null;
+          if (!data || data.type !== "nexura:github-oauth") return;
+          window.clearInterval(timer);
+          window.removeEventListener("message", onMessage);
+          resolve({ ok: Boolean(data.ok), ...(data.error ? { error: data.error } : {}) });
+        }
+        window.addEventListener("message", onMessage);
+      });
+
+      if (!authorized.ok) throw new Error(authorized.error ?? "GitHub authorization failed.");
+
+      const conn = await linkRepo({
+        data: {
+          repo: repo.trim() || slugify(payload.title),
+          owner: owner.trim() || undefined,
+          private: true,
+          autoPush: true,
+        },
+      });
+      setConnection(conn);
+      await doPush(conn);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not connect GitHub.");
+    } finally {
+      popup?.close();
+      setBusy(false);
+    }
+  };
+
+  /** Create/attach the repository for an already-authorized account. */
+  const doLinkRepo = async () => {
+    if (!payload) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const conn = await linkRepo({
+        data: {
+          repo: repo.trim() || slugify(payload.title),
+          owner: owner.trim() || undefined,
+          private: true,
+          autoPush: true,
+        },
+      });
+      setConnection(conn);
+      await doPush(conn);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create the repository.");
     } finally {
       setBusy(false);
     }
@@ -218,7 +316,53 @@ export function ShipDialog({
           </TabsContent>
 
           <TabsContent value="github" className="space-y-3 pt-4">
-            {connection?.connected ? (
+            {connection?.connected && connection.repoLinked === false ? (
+              <>
+                <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">Authorized as {connection.login}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Pick a repository name — we create it on your account and start syncing.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-owner2">Owner / org (optional)</Label>
+                    <Input
+                      id="gh-owner2"
+                      placeholder={connection.login}
+                      value={owner}
+                      onChange={(e) => setOwner(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-repo2">Repository</Label>
+                    <Input id="gh-repo2" value={repo} onChange={(e) => setRepo(e.target.value)} />
+                  </div>
+                </div>
+                <Button
+                  onClick={() => void doLinkRepo()}
+                  disabled={!payload || busy}
+                  className="w-full"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Github className="mr-2 h-4 w-4" />
+                  )}
+                  {busy ? "Creating…" : "Create repo & push"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void doDisconnect()}
+                  disabled={busy}
+                  className="w-full"
+                >
+                  <Unplug className="mr-2 h-4 w-4" />
+                  Disconnect GitHub
+                </Button>
+              </>
+            ) : connection?.connected ? (
               <>
                 <GitHubStatusPanel
                   connection={connection}
@@ -264,6 +408,43 @@ export function ShipDialog({
                   Disconnect repository
                 </Button>
               </>
+            ) : oauth?.configured ? (
+              <>
+                <div className="rounded-md border border-border bg-muted/40 p-3">
+                  <p className="text-sm font-medium">Connect to GitHub</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Authorize Nexura AI on your own GitHub account. We create the repository for
+                    you and keep it in sync — nothing to copy or paste.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-owner">Owner / org (optional)</Label>
+                    <Input
+                      id="gh-owner"
+                      placeholder="your-username"
+                      value={owner}
+                      onChange={(e) => setOwner(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gh-repo">Repository</Label>
+                    <Input id="gh-repo" value={repo} onChange={(e) => setRepo(e.target.value)} />
+                  </div>
+                </div>
+                <Button
+                  onClick={() => void doOAuthConnect()}
+                  disabled={!payload || busy}
+                  className="w-full"
+                >
+                  {busy ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Github className="mr-2 h-4 w-4" />
+                  )}
+                  {busy ? "Waiting for GitHub…" : "Connect to GitHub"}
+                </Button>
+              </>
             ) : (
               <>
                 <div className="space-y-1.5">
@@ -277,8 +458,8 @@ export function ShipDialog({
                     onChange={(e) => setToken(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Stored encrypted on the server so later pushes are one click. Never exposed to
-                    the browser.
+                    One-click GitHub sign-in is not configured on this server yet, so paste a token
+                    instead. It is stored encrypted and never exposed to the browser.
                   </p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -310,6 +491,7 @@ export function ShipDialog({
                 </Button>
               </>
             )}
+
 
             {error && <p className="text-sm text-destructive">{error}</p>}
             {result && (

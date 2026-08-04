@@ -8,6 +8,7 @@ import { previewStyleTag } from "@/lib/preview-theme";
 import { injectTailwind, loadTailwindRuntime } from "@/lib/preview-tailwind";
 
 import { classNameShims, framerMotion, reactRouterDom } from "@/lib/preview-shims";
+import { REAL_MODULES, stubModule } from "@/lib/preview-externals";
 
 import {
   DEVICE_WIDTH,
@@ -122,6 +123,9 @@ const EXTERNALS: Record<string, unknown> = {
   clsx: classNameShims.clsx,
   classnames: classNameShims.clsx,
   "tailwind-merge": classNameShims.twMerge,
+  // Charts, toasts, forms, dates, Radix primitives — the real packages that
+  // already ship with this app, so generated projects render them for real.
+  ...REAL_MODULES,
 };
 
 /** Resolve a bare package id (including sub-paths) to a shimmed module. */
@@ -137,14 +141,28 @@ function resolveExternal(id: string): unknown | undefined {
   return undefined;
 }
 
+/**
+ * Unknown packages resolve to a forgiving stub instead of aborting the build.
+ * A single exotic import used to fail the whole preview and feed the auto-fixer
+ * a phantom error; now the page still renders and the console explains what was
+ * substituted, so the fixer only runs on real problems.
+ */
+const stubbed = new Map<string, unknown>();
+
 function makeRequire() {
   return (id: string) => {
     const external = resolveExternal(id);
     if (external !== undefined) return external;
-    if (/\.(css|scss|sass|less)$/.test(id)) return {};
-    throw new Error(
-      `Module "${id}" is not available in the live preview. Available: react, react-dom, lucide-react, react-router-dom, framer-motion, clsx, tailwind-merge.`,
+    if (/\.(css|scss|sass|less|svg|png|jpe?g|webp|gif)$/.test(id)) return {};
+
+    const cached = stubbed.get(id);
+    if (cached !== undefined) return cached;
+    const stub = stubModule(id);
+    stubbed.set(id, stub);
+    console.info(
+      `[preview] "${id}" is not bundled in the live sandbox — rendered with a placeholder. The exported project installs the real package.`,
     );
+    return stub;
   };
 }
 
@@ -259,8 +277,13 @@ function runProject(
       if (external !== undefined) return external;
       const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
       if (resolved) return load(resolved);
-      if (/\.(css|scss|sass|less)$/.test(id)) return {};
-      throw new Error(`Module "${id}" is not available in the live preview (imported by ${path}).`);
+      if (/\.(css|scss|sass|less|svg|png|jpe?g|webp|gif)$/.test(id)) return {};
+      // A missing sibling file (or an unbundled package) is a placeholder, not
+      // a dead preview: the rest of the project still renders.
+      console.info(
+        `[preview] "${id}" (imported by ${path}) was not found — rendered with a placeholder.`,
+      );
+      return stubModule(id) as Record<string, unknown>;
     };
 
     const run = new Function(
