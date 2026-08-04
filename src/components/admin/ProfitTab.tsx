@@ -18,6 +18,8 @@ import { formatUsd } from "@/lib/credit-ledger";
 import { formatCredits } from "@/lib/credits";
 import { DEFAULT_PRICE_PER_CREDIT, profitSummary, type ProfitRow } from "@/lib/profit";
 import { EmptyState, Panel, Pill, SectionHeading, StatCard, StatSkeleton } from "@/components/admin/ui";
+import { PackageEconomicsPanel } from "@/components/admin/PackageEconomicsPanel";
+
 
 const RANGES = [
   { days: 1, label: "24h" },
