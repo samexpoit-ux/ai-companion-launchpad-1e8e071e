@@ -281,9 +281,8 @@ function runProject(
   entry: string,
   doc: Document,
   win: Window,
+  cache = new Map<string, Record<string, unknown>>(),
 ): Record<string, unknown> {
-  const cache = new Map<string, Record<string, unknown>>();
-
   const load = (path: string): Record<string, unknown> => {
     const cached = cache.get(path);
     if (cached) return cached;
@@ -291,6 +290,8 @@ function runProject(
     const source = files[path] ?? "";
 
     if (/\.css$/.test(path)) {
+      const existing = doc.querySelector(`style[data-nexura-project-css="${CSS.escape(path)}"]`);
+      if (existing) return cache.get(path) ?? {};
       const style = doc.createElement("style");
       style.dataset["nexuraProjectCss"] = path;
       style.textContent = source;
@@ -541,7 +542,8 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
         if (payload.files && Object.keys(payload.files).length > 0) {
           const files = payload.files;
           const renderEntry = pickRenderEntry(files, payload.entry);
-          Component = pickComponent(runProject(files, renderEntry, doc, win));
+          const moduleCache = new Map<string, Record<string, unknown>>();
+          Component = pickComponent(runProject(files, renderEntry, doc, win, moduleCache));
 
           // The chosen module exported no component (a bootstrap file, a config
           // module): walk the other renderable files before giving up.
@@ -549,7 +551,7 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
             for (const candidate of Object.keys(files)) {
               if (candidate === renderEntry || !/\.(t|j)sx$/.test(candidate)) continue;
               try {
-                Component = pickComponent(runProject(files, candidate, doc, win));
+                Component = pickComponent(runProject(files, candidate, doc, win, moduleCache));
               } catch {
                 continue;
               }

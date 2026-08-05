@@ -38,4 +38,13 @@ describe("preview dependency validation", () => {
 
     expect(result.issues.some((issue) => issue.message.includes('Package "react-toastify"'))).toBe(true);
   });
+
+  it("accepts a named component export that the preview can render", async () => {
+    const result = await validateProject(
+      { "src/App.tsx": "export function App(){ return <main>Ready</main> }" },
+      "src/App.tsx",
+    );
+
+    expect(result.ok).toBe(true);
+  });
 });

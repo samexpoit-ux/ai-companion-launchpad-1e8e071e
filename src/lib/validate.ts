@@ -192,7 +192,12 @@ export async function validateProject(
   if (entry && !(entry in files)) {
     issues.push({ level: "error", path: entry, message: "Entry file is missing from the project", source: "build" });
   }
-  if (entry && files[entry] && !/export\s+default/.test(files[entry])) {
+  if (
+    entry &&
+    files[entry] &&
+    !/export\s+default|export\s*\{[^}]*\bas\s+default\b/.test(files[entry]) &&
+    !/export\s+(?:function|class|const)\s+[A-Z][A-Za-z0-9_]*/.test(files[entry])
+  ) {
     issues.push({
       level: "error",
       path: entry,

@@ -72,6 +72,7 @@ export default function PreviewDiagnostics() {
   useEffect(() => {
     if (!payload) return;
     let alive = true;
+    setValidation(null);
     setBusy(true);
     validateProject(files, payload.entry)
       .then((result) => alive && setValidation(result))
@@ -142,7 +143,7 @@ export default function PreviewDiagnostics() {
 
   if (!payload) return null;
 
-  const buildOk = !buildError && (validation?.ok ?? true);
+  const buildOk = !busy && validation !== null && !buildError && validation.ok;
 
   return (
     <div

@@ -446,6 +446,12 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
   /** Short rolling log of what previous attempts tried, sent to the fixer. */
   const historyRef = useRef<Array<{ attempt: number; summary: string; ok: boolean }>>([]);
 
+  // How many times each sandbox-level fault has already been self-healed.
+  // It is reset with every project/revision so one project's shim fault never
+  // prevents another project from receiving its own free reload.
+  const sandboxHealRef = useRef<Map<string, number>>(new Map());
+  const totalAttemptsRef = useRef(0);
+
   const resetFixState = useCallback(() => {
     setRuntimeErrors([]);
     setFixStatus("idle");
@@ -456,6 +462,8 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setFixSkip(null);
     lastSignatureRef.current = "";
     historyRef.current = [];
+    sandboxHealRef.current.clear();
+    totalAttemptsRef.current = 0;
   }, []);
 
   const resetAutoFix = resetFixState;
@@ -743,14 +751,25 @@ export function PreviewProvider({ children }: { children: ReactNode }) {
     setVersions((prev) => prev.map((v) => ({ ...v, current: v.id === id })));
   }, []);
 
-  // How many times each sandbox-level fault has already been self-healed.
-  const sandboxHealRef = useRef<Map<string, number>>(new Map());
-
   const runAutoFix = useCallback(async () => {
     const current = payloadRef.current;
     if (!current || busyRef.current) return;
 
+    // Adaptive per-error budgets are useful, but never let changing/random
+    // error text bypass a hard project-level ceiling and burn credits forever.
+    if (totalAttemptsRef.current >= limitRef.current) {
+      setFixStatus("exhausted");
+      setFixSkip({
+        reason: `Retry limit reached (${limitRef.current})`,
+        detail: "Automatic repair stopped at the hard project limit to protect credits.",
+        at: Date.now(),
+        benign: false,
+      });
+      return;
+    }
+
     busyRef.current = true;
+    totalAttemptsRef.current += 1;
     const attempt = attemptsRef.current + 1;
     setFixAttempts(attempt);
     setFixStatus("fixing");
