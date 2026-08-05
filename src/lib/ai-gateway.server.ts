@@ -469,7 +469,10 @@ export async function runWithFallback(
         const requiresArtifactDelivery =
           route.task === "code" ||
           (route.task === "fix" &&
-            messages.some((message) => /<nexusArtifact\b/i.test(message.content)));
+            messages.some(
+              (message) =>
+                typeof message.content === "string" && /<nexusArtifact\b/i.test(message.content),
+            ));
         if (requiresArtifactDelivery) {
           // The usual cause of a missing closing tag is the provider hitting its
           // output cap. Ask the same model to continue from where it stopped
