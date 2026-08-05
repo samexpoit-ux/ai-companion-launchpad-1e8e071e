@@ -7,6 +7,8 @@ import {
   finalizeRequestCost,
 } from "@/lib/credit-guard.server";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
+import { validateBuildDeliverySyntax } from "@/lib/build-delivery.server";
+import { mergeArtifactProjects, parseArtifacts } from "@/lib/artifact";
 import { FreePoolError, poolKey } from "@/lib/free-pool.server";
 
 import { newTraceId, recordTrace, type TraceAttempt } from "@/lib/request-trace.server";
@@ -67,20 +69,13 @@ function extractCode(raw: string): { code: string | null; summary: string } {
   return { code: stripped.length > 20 ? stripped : null, summary };
 }
 
-/** Pull `<nexusAction type="file" filePath="...">…</nexusAction>` blocks out of a patch response. */
+/**
+ * Extract patch files with the same tolerant parser used by the primary build
+ * path. Long repairs can lose a closing action tag; the old regex silently
+ * dropped that file and caused the same broken source to be retried.
+ */
 function extractFiles(raw: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  const re =
-    /<(?:nexus|bolt)Action\b[^>]*filePath\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/(?:nexus|bolt)Action>/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(raw))) {
-    const path = m[1].trim();
-    let body = m[2].replace(/^\s*\n/, "").replace(/\s+$/, "");
-    const fence = body.match(/^```[a-zA-Z0-9+-]*\n([\s\S]*?)```$/);
-    if (fence) body = fence[1];
-    if (path && body.trim()) out[path] = body;
-  }
-  return out;
+  return mergeArtifactProjects(parseArtifacts(raw))?.files ?? {};
 }
 
 export const Route = createFileRoute("/api/autofix")({
@@ -265,6 +260,32 @@ export const Route = createFileRoute("/api/autofix")({
                 "bad_model_output",
                 "autofix",
                 "The model did not return a usable patch.",
+              );
+            }
+            // Compile the complete post-patch project, not only the changed
+            // snippets, before allowing it to replace the user's preview.
+            const nextFiles = { ...files, ...patched };
+            const patchArtifact = `<nexusArtifact id="autofix-check" title="Auto-fix check">${Object.entries(
+              nextFiles,
+            )
+              .map(
+                ([path, source]) =>
+                  `<nexusAction type="file" filePath="${path}">\n${source}\n</nexusAction>`,
+              )
+              .join("\n")}</nexusArtifact>`;
+            const syntaxIssues = validateBuildDeliverySyntax(patchArtifact);
+            if (syntaxIssues.length > 0) {
+              const diagnostic = syntaxIssues
+                .slice(0, 3)
+                .map(
+                  (issue) =>
+                    `${issue.path}${issue.line ? `:${issue.line}` : ""} — ${issue.message}`,
+                )
+                .join("; ");
+              return apiErrorResponse(
+                "bad_model_output",
+                "autofix",
+                `The proposed repair still contains invalid source: ${diagnostic}`,
               );
             }
             return Response.json({

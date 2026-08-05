@@ -43,6 +43,18 @@ export default function App() { return null; }</nexusAction>
     expect(project.files["src/App.tsx"]).toBe("export default () => null;\n");
   });
 
+  it("keeps a trailing Shop patch when its action closing tag is truncated", () => {
+    const project = parseArtifacts(
+      `FIX: closed the malformed range input
+<nexusArtifact id="autofix" title="Auto-fix">
+<nexusAction type="file" filePath="src/pages/Shop.tsx">
+export default function Shop() { return <input min="0" max="500" />; }`,
+    )[0];
+
+    expect(project.files["src/pages/Shop.tsx"]).toContain('min="0" max="500"');
+    expect(project.files["src/pages/Shop.tsx"]).not.toMatch(/nexus(Artifact|Action)/);
+  });
+
   it("strips unterminated artifacts out of the chat prose", () => {
     const prose = stripArtifacts(
       `Building it now.\n<nexusArtifact id="c" title="C">\n<nexusAction type="file" filePath="src/App.tsx">code</nexusAction>`,
