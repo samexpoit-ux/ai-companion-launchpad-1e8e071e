@@ -27,6 +27,7 @@ import {
   clampChainToCeiling,
 } from "./model-tiers";
 import { validateBuildDeliverySyntax } from "./build-delivery.server";
+import { mergeArtifactProjects, parseArtifacts } from "./artifact";
 import {
   FreePoolError,
   isRateLimitError,
@@ -247,14 +248,9 @@ const MAX_CONTINUATIONS = 2;
 
 /** True when the build reply carries a complete artifact with a real file. */
 export function hasCompleteDelivery(content: string): boolean {
-  const hasArtifact = /<nexusArtifact\b[\s\S]*?<\/nexusArtifact>/i.test(content);
-  // A build can target any stack, so accept a React entry, a static web entry,
-  // or a real backend/infra file as proof of delivery.
-  const hasEntry =
-    /<nexusAction\b[^>]*filePath=["'][^"']*\.(?:tsx|jsx|html|php|blade\.php|ts|js|py|go|rb|java|sql|ya?ml|toml)["']/i.test(
-      content,
-    ) || /<nexusAction\b[^>]*filePath=["'][^"']*Dockerfile[^"']*["']/i.test(content);
-  return hasArtifact && hasEntry;
+  if (!/<\/nexusArtifact>/i.test(content)) return false;
+  const project = mergeArtifactProjects(parseArtifacts(content));
+  return Boolean(project?.entry && project.files[project.entry]);
 }
 
 /**
@@ -468,8 +464,16 @@ export async function runWithFallback(
 
       ran += 1;
       if (out.content.trim()) {
-        // Build mode is a delivery contract, not a normal chat answer.
-        if (route.task === "code") {
+        // Full builds and multi-file repairs share the same delivery contract.
+        // Single-file repair intentionally returns one fenced source file.
+        const requiresArtifactDelivery =
+          route.task === "code" ||
+          (route.task === "fix" &&
+            messages.some(
+              (message) =>
+                typeof message.content === "string" && /<nexusArtifact\b/i.test(message.content),
+            ));
+        if (requiresArtifactDelivery) {
           // The usual cause of a missing closing tag is the provider hitting its
           // output cap. Ask the same model to continue from where it stopped
           // instead of throwing away a build that is 90% written.
@@ -569,26 +573,30 @@ export async function runWithFallback(
             if (salvaged) {
               onAttempt?.({
                 model,
-                ok: true,
+                ok: false,
                 ms: Date.now() - started,
-                error: "recovered a truncated build by closing the artifact",
+                error: "recovered a truncated artifact; running full validation",
               });
-              return { ...out, content: salvaged, upstream: model };
+              // Recovery only repairs protocol tags. The final file may still
+              // end halfway through JSX or a string, so it must pass the exact
+              // same syntax/import/export gate as a normal delivery.
+              out = { ...out, content: salvaged, truncated: false };
+            } else {
+              lastError = new Error(
+                out.truncated
+                  ? `[openrouter:${model}] build was cut off before any file was complete`
+                  : `[openrouter:${model}] incomplete build delivery`,
+              );
+              onAttempt?.({
+                model,
+                ok: false,
+                ms: Date.now() - started,
+                error: out.truncated
+                  ? "output limit reached before the first file finished"
+                  : "incomplete build delivery: missing artifact or entry file",
+              });
+              continue;
             }
-            lastError = new Error(
-              out.truncated
-                ? `[openrouter:${model}] build was cut off before any file was complete`
-                : `[openrouter:${model}] incomplete build delivery`,
-            );
-            onAttempt?.({
-              model,
-              ok: false,
-              ms: Date.now() - started,
-              error: out.truncated
-                ? "output limit reached before the first file finished"
-                : "incomplete build delivery: missing artifact or entry file",
-            });
-            continue;
           }
 
           const syntaxIssues = validateBuildDeliverySyntax(out.content);

@@ -126,7 +126,7 @@ export interface DeliverySyntaxIssue {
  */
 export function validateBuildDeliverySyntax(content: string): DeliverySyntaxIssue[] {
   const project = mergeArtifactProjects(parseArtifacts(content));
-  if (!project) {
+  if (!project || !project.entry || Object.keys(project.files).length === 0) {
     return [{ path: "artifact", message: "No parseable project artifact was returned" }];
   }
 
