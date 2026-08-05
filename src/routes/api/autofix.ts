@@ -7,6 +7,7 @@ import {
   finalizeRequestCost,
 } from "@/lib/credit-guard.server";
 import { resolveRoute, runWithFallback } from "@/lib/ai-gateway.server";
+import { validateBuildDeliverySyntax } from "@/lib/build-delivery.server";
 import { FreePoolError, poolKey } from "@/lib/free-pool.server";
 
 import { newTraceId, recordTrace, type TraceAttempt } from "@/lib/request-trace.server";
@@ -265,6 +266,29 @@ export const Route = createFileRoute("/api/autofix")({
                 "bad_model_output",
                 "autofix",
                 "The model did not return a usable patch.",
+              );
+            }
+            const patchArtifact = `<nexusArtifact id="autofix-check" title="Auto-fix check">${Object.entries(
+              patched,
+            )
+              .map(
+                ([path, source]) =>
+                  `<nexusAction type="file" filePath="${path}">\n${source}\n</nexusAction>`,
+              )
+              .join("\n")}</nexusArtifact>`;
+            const syntaxIssues = validateBuildDeliverySyntax(patchArtifact);
+            if (syntaxIssues.length > 0) {
+              const diagnostic = syntaxIssues
+                .slice(0, 3)
+                .map(
+                  (issue) =>
+                    `${issue.path}${issue.line ? `:${issue.line}` : ""} — ${issue.message}`,
+                )
+                .join("; ");
+              return apiErrorResponse(
+                "bad_model_output",
+                "autofix",
+                `The proposed repair still contains invalid source: ${diagnostic}`,
               );
             }
             return Response.json({

@@ -15,7 +15,6 @@ import {
   CODING_PRIMARY,
   CHEAP_PLAN,
   CODING_SECONDARY,
-  CODING_TERTIARY,
   NANO_CHAT,
   FREE_CODE,
   FREE_FAST,
@@ -100,7 +99,6 @@ const TASK_MODELS: Record<TaskKind, string[]> = {
 const FRIENDLY_BY_UPSTREAM: Record<string, string> = {
   [CODING_PRIMARY]: "nx-builder",
   [CODING_SECONDARY]: "nx-vision",
-  [CODING_TERTIARY]: "nx-builder",
   [CHEAP_CHAT]: "nx-flash",
   [NANO_CHAT]: "nx-flash",
   [FREE_CODE]: "nx-builder",
