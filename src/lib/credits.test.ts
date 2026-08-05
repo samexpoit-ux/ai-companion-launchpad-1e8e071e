@@ -3,7 +3,6 @@ import {
   clampChainToCeiling,
   CODING_PRIMARY,
   CODING_SECONDARY,
-  PREMIUM_MODELS,
   TIER_CHAINS,
 } from "./model-tiers";
 import { estimateCost, actionForMode } from "./credits";

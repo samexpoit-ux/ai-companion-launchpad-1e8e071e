@@ -55,7 +55,7 @@ export const CHEAP_REASON = "deepseek/deepseek-v4-pro";
 /** Cheapest image generation/editing model. */
 export const IMAGE_MODEL = "google/gemini-2.5-flash-image";
 
-/** Free safety net — free plan runs entirely on these. */
+/** Free pool for non-build chat/reasoning lanes. Builds never use this pool. */
 export const FREE_CODE = "poolside/laguna-s-2.1:free";
 export const FREE_CODE_LITE = "poolside/laguna-xs-2.1:free";
 export const FREE_POWER = "nvidia/nemotron-3-ultra-550b-a55b:free";
@@ -65,7 +65,7 @@ export const FREE_SMART_LITE = "google/gemma-4-26b-a4b-it:free";
 export const FREE_FAST = "nvidia/nemotron-3-nano-30b-a3b:free";
 export const FREE_OSS = "openai/gpt-oss-20b:free";
 
-/** Every free model, ordered strongest → fastest. Free plan gets all of them. */
+/** Every free model, ordered strongest → fastest, for eligible non-build tasks. */
 export const FREE_MODELS: readonly string[] = [
   FREE_CODE,
   FREE_POWER,
