@@ -79,4 +79,14 @@ describe("generated build preflight", () => {
       ),
     ).toEqual([]);
   });
+
+  it("rejects recovered truncated source instead of treating a closed artifact as valid", () => {
+    const issues = validateBuildDeliverySyntax(
+      `<nexusArtifact id="app" title="App"><nexusAction type="file" filePath="src/App.tsx">
+export default function App(){ return <main className="min-h-screen
+</nexusAction></nexusArtifact>`,
+    );
+
+    expect(issues.some((issue) => /Unterminated string|Unexpected token/i.test(issue.message))).toBe(true);
+  });
 });
