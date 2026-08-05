@@ -58,6 +58,17 @@ describe("generated build preflight", () => {
     expect(issues.some((issue) => issue.message.includes('Package "react-toastify" is not available'))).toBe(true);
   });
 
+  it("accepts an external package when package.json declares it", () => {
+    expect(
+      validateBuildDeliverySyntax(
+        project({
+          "package.json": JSON.stringify({ dependencies: { "react-toastify": "^11.0.0" } }),
+          "src/App.tsx": "import { ToastContainer } from 'react-toastify'; export default function App(){ return <ToastContainer /> }",
+        }),
+      ),
+    ).toEqual([]);
+  });
+
   it("accepts a complete routed multi-file project", () => {
     expect(
       validateBuildDeliverySyntax(

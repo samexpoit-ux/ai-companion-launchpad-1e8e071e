@@ -22,6 +22,27 @@ function packageRoot(id: string): string {
   return id.split("/")[0] ?? id;
 }
 
+function declaredPackages(files: Record<string, string>): Set<string> {
+  const packages = new Set<string>();
+  const source = files["package.json"];
+  if (!source) return packages;
+  try {
+    const manifest = JSON.parse(source) as {
+      dependencies?: Record<string, unknown>;
+      devDependencies?: Record<string, unknown>;
+    };
+    for (const name of Object.keys({
+      ...(manifest.dependencies ?? {}),
+      ...(manifest.devDependencies ?? {}),
+    })) {
+      packages.add(name);
+    }
+  } catch {
+    // Invalid JSON is reported by the main validation loop.
+  }
+  return packages;
+}
+
 function lineOf(source: string, index: number): number {
   return source.slice(0, index).split("\n").length;
 }
@@ -34,7 +55,12 @@ function hasNamedExport(source: string, name: string): boolean {
   );
 }
 
-function validateImports(path: string, source: string, files: Record<string, string>): DeliverySyntaxIssue[] {
+function validateImports(
+  path: string,
+  source: string,
+  files: Record<string, string>,
+  dependencies: Set<string>,
+): DeliverySyntaxIssue[] {
   const issues: DeliverySyntaxIssue[] = [];
   const importRe = /(?:^|\n)\s*import\s+([\s\S]*?)\s+from\s+["']([^"']+)["']|(?:^|\n)\s*import\s+["']([^"']+)["']/g;
   let match: RegExpExecArray | null;
@@ -49,7 +75,8 @@ function validateImports(path: string, source: string, files: Record<string, str
       continue;
     }
     if (!(id.startsWith(".") || id.startsWith("/") || id.startsWith("@/"))) {
-      if (!SAFE_PREVIEW_PACKAGES.has(packageRoot(id))) {
+      const root = packageRoot(id);
+      if (!SAFE_PREVIEW_PACKAGES.has(root) && !dependencies.has(root)) {
         issues.push({
           path,
           line: lineOf(source, match.index),
@@ -104,6 +131,7 @@ export function validateBuildDeliverySyntax(content: string): DeliverySyntaxIssu
   }
 
   const issues: DeliverySyntaxIssue[] = [];
+  const dependencies = declaredPackages(project.files);
   for (const [path, source] of Object.entries(project.files)) {
     if (path.endsWith(".json")) {
       try {
@@ -132,7 +160,7 @@ export function validateBuildDeliverySyntax(content: string): DeliverySyntaxIssu
         message: parsed.message.replace(/^unknown file:\s*/i, "").split("\n")[0],
       });
     }
-    issues.push(...validateImports(path, source, project.files));
+    issues.push(...validateImports(path, source, project.files, dependencies));
   }
 
   return issues;
