@@ -335,11 +335,13 @@ function runProject(
       if (resolved) return load(resolved);
        if (/\.(css|scss|sass|less)$/.test(id)) return {};
        if (ASSET_RE.test(id)) return { default: id, src: id };
-      // A missing sibling file (or an unbundled package) is a placeholder, not
-      // a dead preview: the rest of the project still renders.
-      console.info(
-        `[preview] "${id}" (imported by ${path}) was not found — rendered with a placeholder.`,
-      );
+      // Bare package imports can use a visual placeholder, but a missing local
+      // file is a real broken project. Throw with both paths so diagnostics and
+      // auto-fix can create/repair the exact module instead of hiding the bug.
+      if (id.startsWith(".") || id.startsWith("/") || id.startsWith("@/")) {
+        throw new Error(`${path}: Cannot resolve local import "${id}"`);
+      }
+      console.info(`[preview] "${id}" is not bundled — rendered with a placeholder.`);
       return stubModule(id) as Record<string, unknown>;
     };
 
@@ -586,7 +588,7 @@ export default function LocalPreview({ payload, device, reloadKey }: Props) {
         rootRef.current.render(
           React.createElement(
             PreviewErrorBoundary,
-            { onError: reportRuntimeError },
+            { key: `boundary-${reloadKey}`, onError: reportRuntimeError },
             React.createElement(Component),
           ),
         );

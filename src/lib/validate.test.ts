@@ -19,4 +19,23 @@ describe("preview dependency validation", () => {
     );
     expect(unavailable).toEqual([]);
   });
+
+  it("accepts dependencies declared by an exported project", async () => {
+    const result = await validateProject({
+      "package.json": JSON.stringify({ dependencies: { "react-toastify": "^11.0.0" } }),
+      "src/App.tsx":
+        "import { ToastContainer } from 'react-toastify'; export default function App(){ return <ToastContainer /> }",
+    }, "src/App.tsx");
+
+    expect(result.issues.filter((issue) => issue.level === "error")).toEqual([]);
+  });
+
+  it("still rejects undeclared external packages", async () => {
+    const result = await validateProject({
+      "src/App.tsx":
+        "import { ToastContainer } from 'react-toastify'; export default function App(){ return <ToastContainer /> }",
+    }, "src/App.tsx");
+
+    expect(result.issues.some((issue) => issue.message.includes('Package "react-toastify"'))).toBe(true);
+  });
 });

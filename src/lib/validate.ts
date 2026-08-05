@@ -73,7 +73,35 @@ function isToolingFile(path: string) {
   return TOOLING_RE.test(path);
 }
 
-function lintFile(path: string, source: string, files: Record<string, string>): ValidationIssue[] {
+function declaredPackages(files: Record<string, string>) {
+  const declared = new Set<string>();
+  const source = files["package.json"];
+  if (!source) return declared;
+  try {
+    const manifest = JSON.parse(source) as {
+      dependencies?: Record<string, unknown>;
+      devDependencies?: Record<string, unknown>;
+    };
+    for (const name of Object.keys({
+      ...(manifest.dependencies ?? {}),
+      ...(manifest.devDependencies ?? {}),
+    })) declared.add(name);
+  } catch {
+    // The JSON validation pass reports the malformed manifest.
+  }
+  return declared;
+}
+
+function packageRoot(id: string) {
+  return id.startsWith("@") ? id.split("/").slice(0, 2).join("/") : (id.split("/")[0] ?? id);
+}
+
+function lintFile(
+  path: string,
+  source: string,
+  files: Record<string, string>,
+  dependencies: Set<string>,
+): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const tooling = isToolingFile(path);
   const push = (level: IssueLevel, message: string, index?: number) =>
@@ -90,7 +118,7 @@ function lintFile(path: string, source: string, files: Record<string, string>): 
       if (id.startsWith(".") || id.startsWith("@/") || id.startsWith("/")) {
         const resolved = resolveModule(files, path, id) ?? resolveAlias(files, id);
         if (!resolved) push(tooling ? "warning" : "error", `Cannot resolve import "${id}"`, m.index);
-      } else if (!tooling) {
+      } else if (!tooling && !dependencies.has(packageRoot(id))) {
         push("error", `Package "${id}" is not available in the live preview`, m.index);
       }
 
@@ -119,6 +147,7 @@ export async function validateProject(
   const { transform } = await import("@babel/standalone");
 
   const paths = Object.keys(files);
+  const dependencies = declaredPackages(files);
   let checked = 0;
 
   for (const path of paths) {
@@ -157,7 +186,7 @@ export async function validateProject(
       });
     }
 
-    issues.push(...lintFile(path, source, files));
+    issues.push(...lintFile(path, source, files, dependencies));
   }
 
   if (entry && !(entry in files)) {

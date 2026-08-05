@@ -569,26 +569,30 @@ export async function runWithFallback(
             if (salvaged) {
               onAttempt?.({
                 model,
-                ok: true,
+                ok: false,
                 ms: Date.now() - started,
-                error: "recovered a truncated build by closing the artifact",
+                error: "recovered a truncated artifact; running full validation",
               });
-              return { ...out, content: salvaged, upstream: model };
+              // Recovery only repairs protocol tags. The final file may still
+              // end halfway through JSX or a string, so it must pass the exact
+              // same syntax/import/export gate as a normal delivery.
+              out = { ...out, content: salvaged, truncated: false };
+            } else {
+              lastError = new Error(
+                out.truncated
+                  ? `[openrouter:${model}] build was cut off before any file was complete`
+                  : `[openrouter:${model}] incomplete build delivery`,
+              );
+              onAttempt?.({
+                model,
+                ok: false,
+                ms: Date.now() - started,
+                error: out.truncated
+                  ? "output limit reached before the first file finished"
+                  : "incomplete build delivery: missing artifact or entry file",
+              });
+              continue;
             }
-            lastError = new Error(
-              out.truncated
-                ? `[openrouter:${model}] build was cut off before any file was complete`
-                : `[openrouter:${model}] incomplete build delivery`,
-            );
-            onAttempt?.({
-              model,
-              ok: false,
-              ms: Date.now() - started,
-              error: out.truncated
-                ? "output limit reached before the first file finished"
-                : "incomplete build delivery: missing artifact or entry file",
-            });
-            continue;
           }
 
           const syntaxIssues = validateBuildDeliverySyntax(out.content);
