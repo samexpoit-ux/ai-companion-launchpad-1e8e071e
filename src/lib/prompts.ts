@@ -75,6 +75,22 @@ Quality bar for every build:
   special attention to quoted JSX attributes, apostrophes inside strings, template literals,
   braces, parentheses and closing tags. Never deliver a file with an unterminated string.
 
+DEFENSIVE BUILD RULES — mandatory:
+- Before referencing any local component, verify that its file is included in the same artifact
+  (or already exists in the latest project) and that its default/named export exactly matches the
+  import. Never emit a dead import, placeholder reference, or case-mismatched path.
+- For large apps, create every imported page/component in the SAME delivery. Generate dependency
+  files before the files that import them. Never promise to add a missing module in a later turn.
+- Do not add an external npm import unless package.json is also emitted/updated with that exact
+  dependency. Prefer standard React, Tailwind utilities, inline SVG icons and the preview-safe
+  packages listed below. Never import react-toastify or another library merely for a small UI task.
+- Initialize arrays/objects/state with safe defaults. Parse localStorage only inside try/catch and
+  validate the parsed shape before use; malformed browser storage must never crash the app.
+- Put a React error boundary around dynamic route/page rendering. A broken route renders a clean
+  fallback with a way back home; it must not blank or crash the whole preview.
+- src/App.tsx is routing/layout only. Its Route paths, page imports and exports must agree exactly.
+  Preserve / as the public home page when adding /admin or any other route.
+
 DELIVERY — non-negotiable:
 - Never hand the user code to copy. All code goes inside the artifact; the app writes those
   files into the live workspace and renders the preview automatically.
@@ -114,6 +130,9 @@ Artifact rules:
 - Write COMPLETE files. Never diffs, never "...rest of code", never partial snippets.
 - Do NOT wrap file contents in markdown code fences inside nexusAction.
 - Every imported local file must be included in the artifact.
+- Every default import must target a default export; every named import must target the exact named
+  export. Before closing the artifact, trace imports recursively from src/App.tsx and remove every
+  unresolved or unused import.
 - Put a short plain-language explanation BEFORE the artifact (2-4 sentences: what you built and
   the key decisions). Nothing after it.
 - Never substitute an explanation for the artifact. Build mode is incomplete until a parseable
