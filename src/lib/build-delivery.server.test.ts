@@ -91,7 +91,7 @@ export default function App(){ return <main className="min-h-screen
   });
 
   it("rejects malformed actions that do not produce a parseable entry", () => {
-    const malformed = `<nexusArtifact id="app" title="App"><nexusAction type="file" filepath="src/App.tsx">export default function App(){ return null }</nexusAction></nexusArtifact>`;
+    const malformed = `<nexusArtifact id="app" title="App"><nexusAction type="file" sourcePath="src/App.tsx">export default function App(){ return null }</nexusAction></nexusArtifact>`;
     expect(validateBuildDeliverySyntax(malformed)).toEqual([
       { path: "artifact", message: "No parseable project artifact was returned" },
     ]);
