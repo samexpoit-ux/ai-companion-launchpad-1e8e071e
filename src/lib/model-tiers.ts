@@ -35,7 +35,7 @@
  * IMPORTANT: every id here must exist on https://openrouter.ai/api/v1/models.
  */
 
-/** Coding tier — best value first, strong cheap coders as fallback. */
+/** Build tier — exactly two vetted engines; no free/experimental build fallback. */
 export const CODING_PRIMARY = "openai/gpt-5.6-luna-pro";
 export const CODING_SECONDARY = "deepseek/deepseek-v4-flash";
 /** Cheap specialist coders (agentic, long context) used before giving up. */
@@ -79,23 +79,10 @@ export const FREE_MODELS: readonly string[] = [
 
 /** Ordered chains: [primary, ...fallbacks]. */
 export const TIER_CHAINS = {
-  code: [
-    CODING_PRIMARY,
-    CODING_SECONDARY,
-    CODING_TERTIARY,
-    CODING_BUDGET,
-    CHEAP_REASON,
-    ...FREE_MODELS,
-  ],
-  // Bug fixing / auto-fix: cheap specialist coders write the tightest patches.
-  fix: [
-    CODING_PRIMARY,
-    CODING_TERTIARY,
-    CODING_BUDGET,
-    CODING_SECONDARY,
-    CHEAP_REASON,
-    ...FREE_MODELS,
-  ],
+  code: [CODING_PRIMARY, CODING_SECONDARY],
+  // Repairs use the same vetted pair as builds so malformed free-model output
+  // can never overwrite a working preview.
+  fix: [CODING_PRIMARY, CODING_SECONDARY],
   // Plans stay cheap — Google Flash Lite plans at chat-model prices.
   reason: [CHEAP_PLAN, CHEAP_REASON, CODING_PRIMARY, FREE_POWER, FREE_SMART, FREE_OSS],
   chat: [CHEAP_CHAT, NANO_CHAT, CHEAP_SMART, FREE_POWER, FREE_SMART, FREE_OSS],
@@ -105,12 +92,8 @@ export const TIER_CHAINS = {
 
 /** Small code question — no need to pay the top coding tier. */
 export const LIGHT_CODE_CHAIN = [
-  CODING_TERTIARY,
-  CODING_BUDGET,
-  CHEAP_CHAT,
-  FREE_CODE,
-  FREE_POWER,
-  FREE_OSS,
+  CODING_PRIMARY,
+  CODING_SECONDARY,
 ];
 
 /** Models that cost real money, grouped by how expensive they are. */

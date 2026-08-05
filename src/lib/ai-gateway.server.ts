@@ -6,9 +6,7 @@
 // well:
 //   trivial / short chat  -> free or ultra-cheap model
 //   normal chat / plan    -> cheap chat tier
-//   coding / bug fixing   -> best coding tier (used only when needed)
-// Every route has a fallback chain that ends on free models, so the service keeps
-// working even if the paid credit runs out.
+//   coding / bug fixing   -> vetted two-model build lane
 //
 // All model ids live in `model-tiers.ts` — edit that file, not this one.
 
@@ -29,6 +27,7 @@ import {
   TIER_CHAINS,
   clampChainToCeiling,
 } from "./model-tiers";
+import { validateBuildDeliverySyntax } from "./build-delivery.server";
 import {
   FreePoolError,
   isRateLimitError,
@@ -186,8 +185,14 @@ export function resolveRoute(
   const ceiling = planById(options?.plan).ceiling;
   // Image generation has exactly one cheap model — clamping it away would leave
   // the request unrunnable, so the image chain is used as-is.
+  // Build reliability is more important than a free endpoint: code and repair
+  // always use the same two vetted engines, while credits still cap usage.
   const chain =
-    task === "image" ? [...TASK_MODELS.image] : clampChainToCeiling(chainFor(task, prompt), ceiling);
+    task === "image"
+      ? [...TASK_MODELS.image]
+      : task === "code" || task === "fix"
+        ? chainFor(task, prompt)
+        : clampChainToCeiling(chainFor(task, prompt), ceiling);
 
   // A legacy explicit pick only nudges the chain to the front; it never
   // overrides a cheaper-is-fine decision for trivial prompts.
@@ -584,6 +589,24 @@ export async function runWithFallback(
               error: out.truncated
                 ? "output limit reached before the first file finished"
                 : "incomplete build delivery: missing artifact or entry file",
+            });
+            continue;
+          }
+
+          const syntaxIssues = validateBuildDeliverySyntax(out.content);
+          if (syntaxIssues.length > 0) {
+            const diagnostic = syntaxIssues
+              .slice(0, 3)
+              .map((issue) =>
+                `${issue.path}${issue.line ? `:${issue.line}` : ""} — ${issue.message}`,
+              )
+              .join("; ");
+            lastError = new Error(`[openrouter:${model}] generated invalid source: ${diagnostic}`);
+            onAttempt?.({
+              model,
+              ok: false,
+              ms: Date.now() - started,
+              error: `generated source failed compilation: ${diagnostic}`,
             });
             continue;
           }
