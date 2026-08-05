@@ -314,6 +314,23 @@ export const Route = createFileRoute("/api/autofix")({
             );
           }
 
+          const singlePath = body.lang?.includes("ts") ? "src/App.tsx" : "src/App.jsx";
+          const singleArtifact = `<nexusArtifact id="autofix-check" title="Auto-fix check"><nexusAction type="file" filePath="${singlePath}">\n${fixed}\n</nexusAction></nexusArtifact>`;
+          const singleIssues = validateBuildDeliverySyntax(singleArtifact);
+          if (singleIssues.length > 0) {
+            const diagnostic = singleIssues
+              .slice(0, 3)
+              .map((issue) =>
+                `${issue.path}${issue.line ? `:${issue.line}` : ""} — ${issue.message}`,
+              )
+              .join("; ");
+            return apiErrorResponse(
+              "bad_model_output",
+              "autofix",
+              `The proposed repair still contains invalid source: ${diagnostic}`,
+            );
+          }
+
           return Response.json({
             code: fixed,
             summary,
